@@ -214,8 +214,20 @@ class MatchTest {
         }
     }
 
-    /** Brute-force search for a mud throw from [side] that lands on the other pet with no fort in the way. */
-    private fun findHit(m: Match, side: Side): Pair<Float, Float> {
+    @Test
+    fun aBoneThatHitsHeadOnIsNotABoomerang() {
+        val m = newMatch()
+        m.skipBuild()
+        val (vx, vy) = findHit(m, Side.LEFT, ItemType.BONE, forwardOnly = true)
+        assertTrue(m.throwItem(ItemType.BONE, vx, vy))
+        m.runUntil { phase == Phase.AIM }
+        assertTrue("the bone should hit (cat mess ${m.pet(Side.RIGHT).mess})", m.pet(Side.RIGHT).mess > 5f)
+        assertFalse("a head-on hit bounced back but is no boomerang: ${m.tricks(Side.LEFT)}", "Boomerang!" in m.tricks(Side.LEFT))
+        assertEquals(1, m.stats(Side.LEFT).hits)
+    }
+
+    /** Brute-force search for a throw from [side] that lands on the other pet with no fort in the way. */
+    private fun findHit(m: Match, side: Side, item: ItemType = ItemType.MUD, forwardOnly: Boolean = false): Pair<Float, Float> {
         val target = m.pet(side.other).body.position
         val origin = Arena.launchPoint(side)
         var best = Float.MAX_VALUE
@@ -227,8 +239,8 @@ class MatchTest {
                 val vx = side.dir * MathUtils.cosDeg(angle) * speed
                 val vy = MathUtils.sinDeg(angle) * speed
                 var miss = Float.MAX_VALUE
-                Trajectory.simulate(origin.x, origin.y, vx, vy, ItemType.MUD, side, m.wind, 400) { _, x, y, _, _ ->
-                    miss = minOf(miss, com.badlogic.gdx.math.Vector2.dst(x, y, target.x, target.y))
+                Trajectory.simulate(origin.x, origin.y, vx, vy, item, side, m.wind, 400) { _, x, y, svx, _ ->
+                    if (!forwardOnly || svx * side.dir > 0f) miss = minOf(miss, com.badlogic.gdx.math.Vector2.dst(x, y, target.x, target.y))
                     val inFence = kotlin.math.abs(x - Arena.FENCE_X) < Arena.FENCE_HALF_W + 0.4f && y < Arena.FENCE_PEAK + 0.4f
                     y > Arena.GROUND_Y && !inFence
                 }

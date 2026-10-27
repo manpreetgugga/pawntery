@@ -62,9 +62,8 @@ class ShopScreen(game: Pawtillery) : BaseScreen(game) {
         batch.end()
 
         if (afterGate != null) {
+            shadeScreen(Palette.SHADE)
             beginUiShapes()
-            s.color = Palette.SHADE
-            s.rect(0f, 0f, uiW, uiH)
             Ui.panel(s, cx - 330f, uiH / 2f - 400f, 660f, 720f)
             Ui.buttons(s, gateButtons, pressedId)
             s.end()
@@ -105,9 +104,9 @@ class ShopScreen(game: Pawtillery) : BaseScreen(game) {
                 val col = i % 3
                 val row = i / 3
                 val style = if (k == "OK") ButtonStyle.PRIMARY else ButtonStyle.LIGHT
-                list += Button("gate:$k", x0 + col * (keyW + 16f), top - keyH - row * (keyH + 14f), keyW, keyH, k, style)
+                list += Button("gate:$k", x0 + col * (keyW + 16f), top - keyH - row * (keyH + 14f), keyW, keyH, k, style, layer = 1)
             }
-            list += Button("gate:cancel", cx - 150f, uiH / 2f - 384f, 300f, 64f, "Cancel", font = game.assets.body)
+            list += Button("gate:cancel", cx - 150f, uiH / 2f - 384f, 300f, 64f, "Cancel", font = game.assets.body, layer = 1)
         }
         return list
     }

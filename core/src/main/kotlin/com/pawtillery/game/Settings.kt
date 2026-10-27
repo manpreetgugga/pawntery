@@ -25,12 +25,14 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         get() = prefs.getBoolean("vibration", true)
         set(value) = save { prefs.putBoolean("vibration", value) }
 
-    /** Clears all progress (treats, pets, stars, stats) but keeps Plus and the sound settings. */
+    /**
+     * Clears progress (treats, pets, stars, dailies, trophies, stats). Settings, Plus and the
+     * daily ad count stay, so a reset can't be used to watch more ads in a day.
+     */
     fun resetProgress() {
-        val keep = listOf("plus", "sound", "music", "vibration", "easyMode")
-        val saved = keep.associateWith { prefs.getBoolean(it, it != "plus") }
-        prefs.clear()
-        saved.forEach { (k, v) -> prefs.putBoolean(k, v) }
+        val progress = listOf("treats", "wins", "gamesPlayed", "unlocked.", "challenge.", "daily.", "trophy.", "stats.")
+        prefs.get().keys.filter { key -> progress.any { key == it || (it.endsWith(".") && key.startsWith(it)) } }
+            .forEach { prefs.remove(it) }
         prefs.flush()
     }
 

@@ -63,6 +63,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     /** The optional rewarded ad that doubles a game's treats: not offered, showing, or used. */
     private var adPlaying = false
     private var adUsed = false
+    /** Counts restarts, so a late ad result can't land on a newer game. */
+    private var gameNumber = 0
     private var unlockable: PetKind? = null
     private val humans = Side.entries.filter { it !in setup.computer }
 
@@ -417,6 +419,11 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     }
 
     override fun onRelease(ui: Vector2, world: Vector2) {
+        if (overlayUp) {
+            ghostX = null
+            dragging = false
+            return
+        }
         val gx = ghostX
         if (gx != null) {
             ghostX = null
@@ -464,8 +471,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         when (id) {
             "angle-" -> aimAngle[i] = (aimAngle[i] - 1f).coerceIn(0f, 85f)
             "angle+" -> aimAngle[i] = (aimAngle[i] + 1f).coerceIn(0f, 85f)
-            "power-" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() - 1).coerceIn(5, 100) / 100f
-            "power+" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() + 1).coerceIn(5, 100) / 100f
+            "power-" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() - 1).coerceIn(MIN_POWER_PERCENT, 100) / 100f
+            "power+" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() + 1).coerceIn(MIN_POWER_PERCENT, 100) / 100f
         }
     }
 
@@ -545,6 +552,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         treatsEarned = 0
         adPlaying = false
         adUsed = false
+        gameNumber++
         starsEarned = 0
         unlockable = null
         particles.clear()
@@ -611,6 +619,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         batch.end()
 
         if (overlayUp) {
+            shadeScreen(Palette.SHADE)
             beginUiShapes()
             drawOverlayShapes()
             Ui.buttons(s, buttons, pressedId)
@@ -808,6 +817,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             return list
         }
         if (match.phase == Phase.OVER) {
+            // Nothing to tap while an ad plays; its result goes to this game.
+            if (adPlaying) return list
             val c = challenge
             if (overTime > 0.9f && canOfferAd()) {
                 list += Button("double_ad", uiW / 2f + 10f, treatsLineY() - 32f, 360f, 64f, "Watch an ad: double it", ButtonStyle.TEAL, font = game.assets.body)
@@ -1071,8 +1082,6 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     private fun drawOverlayShapes() {
         val s = shapes
-        s.color = Palette.SHADE
-        s.rect(0f, 0f, uiW, uiH)
         if (paused) {
             Ui.panel(s, uiW / 2f - 260f, uiH / 2f - 270f, 520f, 520f)
             return
@@ -1183,15 +1192,18 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private fun watchAdForDoubleTreats() {
         adPlaying = true
         val day = today()
+        val forGame = gameNumber
         game.platform.showRewardedAd(
-            onReward = {
+            onReward = reward@{
+                if (forGame != gameNumber) return@reward
                 game.settings.addTreats(treatsEarned)
                 game.settings.recordAdWatched(day)
                 treatsEarned *= 2
                 unlockable = PetKind.entries.firstOrNull { !game.settings.isUnlocked(it) && game.settings.treats >= it.price }
                 game.sfx("win", 0.7f)
             },
-            onDone = {
+            onDone = done@{
+                if (forGame != gameNumber) return@done
                 adPlaying = false
                 adUsed = true
             },
@@ -1200,7 +1212,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     private companion object {
         const val PULL_FOR_FULL_POWER = 330f
-        const val MIN_POWER = 0.12f
+        const val MIN_POWER_PERCENT = 12
+        const val MIN_POWER = MIN_POWER_PERCENT / 100f
         const val DRAG_SLOP = 14f
         const val HOP_TIME = 0.35f
         const val AIM_PANEL_W = 430f

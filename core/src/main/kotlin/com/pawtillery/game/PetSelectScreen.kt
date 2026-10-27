@@ -67,9 +67,8 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
 
         val kind = offer
         if (kind != null) {
+            shadeScreen(Palette.SHADE)
             beginUiShapes()
-            s.color = Palette.SHADE
-            s.rect(0f, 0f, uiW, uiH)
             Ui.panel(s, uiW / 2f - 380f, uiH / 2f - 210f, 760f, 400f)
             Ui.buttons(s, offerButtons, pressedId)
             s.end()
@@ -114,10 +113,10 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
         offer?.let { kind ->
             val affordable = game.settings.treats >= kind.price
             if (affordable) {
-                list += Button("offer_buy", cx - 330f, uiH / 2f - 170f, 320f, 96f, "Unlock", ButtonStyle.PRIMARY)
-                list += Button("offer_close", cx + 10f, uiH / 2f - 170f, 320f, 96f, "Not now")
+                list += Button("offer_buy", cx - 330f, uiH / 2f - 170f, 320f, 96f, "Unlock", ButtonStyle.PRIMARY, layer = 1)
+                list += Button("offer_close", cx + 10f, uiH / 2f - 170f, 320f, 96f, "Not now", layer = 1)
             } else {
-                list += Button("offer_close", cx - 160f, uiH / 2f - 170f, 320f, 96f, "OK", ButtonStyle.PRIMARY)
+                list += Button("offer_close", cx - 160f, uiH / 2f - 170f, 320f, 96f, "OK", ButtonStyle.PRIMARY, layer = 1)
             }
         }
         return list

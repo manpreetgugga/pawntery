@@ -34,8 +34,16 @@ class Button(
     /** Draws an icon centered at (cx, cy) fitting in [size] UI units. Labels move below it. */
     val icon: ((ShapeRenderer, Float, Float, Float) -> Unit)? = null,
     val font: BitmapFont? = null,
+    /** Dialog buttons use a higher layer; while any are showing, only the top layer takes taps. */
+    val layer: Int = 0,
 ) {
     fun contains(px: Float, py: Float) = px >= x && px <= x + w && py >= y && py <= y + h
+}
+
+/** The button a tap at (x, y) lands on: only the top layer counts, and later buttons sit on top of earlier ones. */
+fun List<Button>.hitTest(x: Float, y: Float): Button? {
+    val top = maxOfOrNull { it.layer } ?: return null
+    return lastOrNull { it.layer == top && it.enabled && it.contains(x, y) }
 }
 
 object Ui {

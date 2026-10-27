@@ -79,6 +79,21 @@ class ProgressTest {
         assertTrue(settings.sound)
     }
 
+    @Test
+    fun resetKeepsTheDailyAdCountAndOtherSettings() {
+        val today = "2026-10-27"
+        repeat(MAX_ADS_PER_DAY) { settings.recordAdWatched(today) }
+        settings.computerLevel = ComputerLevel.CHAMPION
+        settings.quickMatch = true
+        settings.grantTrophy(Trophy.FIRST_WIN)
+        settings.resetProgress()
+        assertFalse("reset must not refill today's ads", settings.canWatchAd(today))
+        assertEquals(ComputerLevel.CHAMPION, settings.computerLevel)
+        assertTrue(settings.quickMatch)
+        assertFalse(settings.hasTrophy(Trophy.FIRST_WIN))
+        assertEquals(0, settings.treats)
+    }
+
     private fun win(level: ComputerLevel = ComputerLevel.NORMAL, hits: Int = 3, tricks: List<String> = emptyList(), ownMess: Float = 20f) =
         GameSummary(GameKind.VS_COMPUTER, true, level, MatchConfig.FULL_MATCH, 10, hits, tricks, ownMess)
 

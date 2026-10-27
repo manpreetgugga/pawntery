@@ -60,7 +60,8 @@ data class ThrowStats(val throws: Int, val hits: Int, val tricks: Int)
  * Runs on a fixed time step so throws, the aim guide and the computer player all agree.
  */
 class Match(val config: MatchConfig) : Disposable {
-    private class Hit(val projectile: Projectile, val other: Any?, val x: Float, val y: Float, val speed: Float)
+    /** A projectile touching something; [vx] is its horizontal velocity at that moment, before the bounce. */
+    private class Hit(val projectile: Projectile, val other: Any?, val x: Float, val y: Float, val speed: Float, val vx: Float)
     private class Crush(val pet: Pet, val impulse: Float)
 
     val world: World
@@ -373,7 +374,7 @@ class Match(val config: MatchConfig) : Disposable {
                 is Pet -> {
                     if (!p.scoredPet) {
                         p.scoredPet = true
-                        addMess(other, p.mess * speedFactor(hit.speed), hit.x, hit.y, p.item, trickFor(p))
+                        addMess(other, p.mess * speedFactor(hit.speed), hit.x, hit.y, p.item, directHit = true, trick = trickFor(p, hit.vx))
                     }
                     if (p.item.splatsOnContact) splat(p, other.body, other.decals, PET_DECALS, hit.x, hit.y)
                 }
@@ -401,7 +402,7 @@ class Match(val config: MatchConfig) : Disposable {
     }
 
     /** Names a skill shot: a boomerang hitting on its way back, a roller that banked in, or several split pieces landing. */
-    private fun trickFor(p: Projectile): String? {
+    private fun trickFor(p: Projectile, vxAtContact: Float): String? {
         if (p.fragment) {
             fragmentHits++
             return when (fragmentHits) {
@@ -412,7 +413,7 @@ class Match(val config: MatchConfig) : Disposable {
             }
         }
         return when {
-            p.item.returnAccel > 0f && p.body.linearVelocity.x * p.side.dir < 0f -> "Boomerang!"
+            p.item.returnAccel > 0f && vxAtContact * p.side.dir < 0f -> "Boomerang!"
             !p.item.splatsOnContact && p.bounces > 0 -> "Bank shot!"
             else -> null
         }
@@ -420,13 +421,14 @@ class Match(val config: MatchConfig) : Disposable {
 
     private fun speedFactor(speed: Float) = (speed / 12f).coerceIn(0.6f, 1.25f)
 
-    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?, trick: String? = null) {
+    /** [directHit] marks mess that counts as a hit in the stats: a direct hit or a water balloon's burst, not near-miss spatter or crushes. */
+    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?, directHit: Boolean = false, trick: String? = null) {
         if (amount < 0.5f) return
         val before = pet.mess
         pet.mess = min(Arena.MESS_TO_LOSE, pet.mess + amount)
         pet.hitTimer = 0.9f
         val gained = pet.mess - before
-        if (item != null && pet.side != turn && gained >= HIT_THRESHOLD) throwHit = true
+        if (directHit && pet.side != turn && gained >= HIT_THRESHOLD) throwHit = true
         if (trick != null && pet.side != turn) {
             trickShots[turn.ordinal]++
             trickLog[turn.ordinal].add(trick)
@@ -470,7 +472,7 @@ class Match(val config: MatchConfig) : Disposable {
             val d = Vector2.dst(pos.x, pos.y, x, y)
             val f = 1f - (d - 0.8f) / (SPLASH_RADIUS - 0.8f)
             if (f > 0f) {
-                addMess(pet, ItemType.WATER.mess * min(f, 1f), pos.x, pos.y + Arena.PET_H / 2f, ItemType.WATER)
+                addMess(pet, ItemType.WATER.mess * min(f, 1f), pos.x, pos.y + Arena.PET_H / 2f, ItemType.WATER, directHit = true)
                 pet.decals.add(Decal((x - pos.x) * 0.4f, 0.1f + rng.nextFloat() * 0.3f, 0.2f, ItemType.WATER, rng.nextInt()))
                 if (pet.decals.size > PET_DECALS) pet.decals.removeAt(0)
             }
@@ -650,7 +652,7 @@ class Match(val config: MatchConfig) : Disposable {
             }
             val pv = proj.body.linearVelocity
             val ov = other.linearVelocity
-            hits.add(Hit(proj, other.userData, x, y, Vector2.len(pv.x - ov.x, pv.y - ov.y)))
+            hits.add(Hit(proj, other.userData, x, y, Vector2.len(pv.x - ov.x, pv.y - ov.y), pv.x))
         }
 
         override fun postSolve(contact: Contact, impulse: ContactImpulse) {

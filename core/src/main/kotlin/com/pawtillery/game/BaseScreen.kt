@@ -39,7 +39,7 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
         override fun touchDown(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
             if (pointer > 0) return false
             val ui = uiView.unproject(touchUi.set(screenX.toFloat(), screenY.toFloat()))
-            val hit = buttons.firstOrNull { it.enabled && it.contains(ui.x, ui.y) }
+            val hit = buttons.hitTest(ui.x, ui.y)
             if (hit != null) {
                 pressedId = hit.id
                 onButtonDown(hit.id)
@@ -62,8 +62,8 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
             val pressed = pressedId
             if (pressed != null) {
                 pressedId = null
-                val b = buttons.firstOrNull { it.id == pressed }
-                if (b != null && b.enabled && b.contains(ui.x, ui.y)) {
+                val b = buttons.hitTest(ui.x, ui.y)
+                if (b != null && b.id == pressed) {
                     game.sfx("click", 0.7f)
                     onButton(b.id)
                 }
@@ -136,9 +136,21 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     protected fun drawFade(delta: Float) {
         if (fadeIn <= 0f) return
         fadeIn -= delta
-        beginUiShapes()
-        shapes.setColor(Palette.INK.r, Palette.INK.g, Palette.INK.b, (fadeIn / FADE_TIME).coerceIn(0f, 1f))
-        shapes.rect(0f, 0f, uiW, uiH)
+        shadeScreen(tmpShade.set(Palette.INK.r, Palette.INK.g, Palette.INK.b, (fadeIn / FADE_TIME).coerceIn(0f, 1f)))
+    }
+
+    private val tmpShade = com.badlogic.gdx.graphics.Color()
+
+    /** Covers the whole screen, including the strips beside camera cutouts that the UI view leaves out. */
+    protected fun shadeScreen(color: com.badlogic.gdx.graphics.Color) {
+        enableBlending()
+        worldView.apply()
+        shapes.projectionMatrix = worldCam.combined
+        shapes.identity()
+        shapes.begin(ShapeRenderer.ShapeType.Filled)
+        shapes.color = color
+        val bottom = worldCam.position.y - worldView.worldHeight / 2f
+        shapes.rect(viewLeft - 1f, bottom - 1f, worldView.worldWidth + 2f, worldView.worldHeight + 2f)
         shapes.end()
     }
 

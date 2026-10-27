@@ -42,9 +42,8 @@ class SettingsScreen(game: Pawtillery) : BaseScreen(game) {
         batch.end()
 
         if (confirmReset) {
+            shadeScreen(Palette.SHADE)
             beginUiShapes()
-            s.color = Palette.SHADE
-            s.rect(0f, 0f, uiW, uiH)
             Ui.panel(s, cx - 380f, uiH / 2f - 200f, 760f, 400f)
             Ui.buttons(s, dialog, pressedId)
             s.end()
@@ -79,8 +78,8 @@ class SettingsScreen(game: Pawtillery) : BaseScreen(game) {
             Button("reset", uiW - 340f, 34f, 300f, 96f, "Reset progress", font = game.assets.body),
         )
         if (confirmReset) {
-            list += Button("reset_yes", cx - 330f, uiH / 2f - 170f, 310f, 96f, "Reset")
-            list += Button("reset_no", cx + 20f, uiH / 2f - 170f, 310f, 96f, "Keep it", ButtonStyle.PRIMARY)
+            list += Button("reset_yes", cx - 330f, uiH / 2f - 170f, 310f, 96f, "Reset", layer = 1)
+            list += Button("reset_no", cx + 20f, uiH / 2f - 170f, 310f, 96f, "Keep it", ButtonStyle.PRIMARY, layer = 1)
         }
         return list
     }
