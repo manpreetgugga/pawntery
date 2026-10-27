@@ -71,8 +71,17 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private val tmpColor = Color()
 
     private fun newMatch() = Match(
-        MatchConfig(easyMode = game.settings.easyMode, leftKind = setup.left, rightKind = setup.right, throwsPerPlayer = setup.throwsPerPlayer),
+        MatchConfig(
+            easyMode = game.settings.easyMode,
+            leftKind = setup.left,
+            rightKind = setup.right,
+            throwsPerPlayer = setup.throwsPerPlayer,
+            challenge = setup.challenge,
+        ),
     )
+
+    private val challenge: Challenge? get() = setup.challenge
+    private var starsEarned = 0
 
     private fun newComputer() = ComputerPlayer(Random(System.nanoTime()), setup.level)
 
@@ -81,6 +90,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private fun petName(side: Side) = match.pet(side).kind.displayName
 
     private fun playerLabel(side: Side) = when {
+        challenge != null -> if (side == Side.LEFT) "You" else "Target"
         humans.size == 2 -> "Player ${side.ordinal + 1}"
         isHuman(side) -> "You"
         else -> setup.level.displayName
@@ -197,12 +207,17 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 computerAiming = false
                 dragging = false
                 if (match.count(e.side, selectedItem[e.side.ordinal]) == 0) selectedItem[e.side.ordinal] = ItemType.MUD
-                val who = when {
-                    humans.size == 2 -> playerLabel(e.side)
-                    isHuman(e.side) -> "Your throw"
-                    else -> "Computer's throw"
+                val c = challenge
+                if (c != null) {
+                    if (match.stats(Side.LEFT).throws == 0) banner("Level ${c.number}: ${c.title}", c.brief)
+                } else {
+                    val who = when {
+                        humans.size == 2 -> playerLabel(e.side)
+                        isHuman(e.side) -> "Your throw"
+                        else -> "Computer's throw"
+                    }
+                    banner("${petName(e.side)}'s turn", who)
                 }
-                banner("${petName(e.side)}'s turn", who)
             }
             is MatchEvent.Thrown -> {
                 game.sfx("throw", 0.9f, 0.85f + aimVelocity(e.side, vel).len() / Arena.MAX_SPEED * 0.3f)
@@ -249,6 +264,12 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     }
 
     private fun giveTreats(winner: Side?) {
+        val c = challenge
+        if (c != null) {
+            starsEarned = match.challengeStars()
+            treatsEarned = game.settings.recordChallenge(c.number, starsEarned)
+            return
+        }
         if (humans.isEmpty()) return
         val result = when {
             humans.size == 2 || winner == null -> GameResult.DRAW
@@ -351,6 +372,17 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         aimAngle[side.ordinal] = (atan2(dy, dx * side.dir) * MathUtils.radiansToDegrees).coerceIn(0f, 85f).roundToInt().toFloat()
     }
 
+    /** For automated UI tours: aims the current player's throw as a sharp computer player would, and throws it. */
+    fun devAutoThrow() {
+        if (!humanAiming) return
+        val side = match.turn
+        val plan = ComputerPlayer(Random(1), ComputerLevel.CHAMPION).planShot(match, side)
+        selectedItem[side.ordinal] = plan.item
+        aimAngle[side.ordinal] = atan2(plan.vy, abs(plan.vx)) * MathUtils.radiansToDegrees
+        aimPower[side.ordinal] = Vector2.len(plan.vx, plan.vy) / Arena.MAX_SPEED
+        throwNow()
+    }
+
     private fun throwNow() {
         val side = match.turn
         aimPower[side.ordinal] = aimPower[side.ordinal].coerceAtLeast(MIN_POWER)
@@ -397,6 +429,11 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             id == "pause" -> paused = true
             id == "resume" -> paused = false
             id == "restart" || id == "rematch" -> restart()
+            id == "levels" -> game.switchTo(ChallengeListScreen(game))
+            id == "next" -> {
+                val next = challenge?.let { Challenges.byNumber(it.number + 1) }
+                if (next != null) game.switchTo(GameScreen(game, MatchSetup.forChallenge(next)))
+            }
             id == "menu" -> game.switchTo(MenuScreen(game))
             id == "pets" -> game.switchTo(PetSelectScreen(game, twoPlayers = humans.size == 2))
             id.startsWith("piece:") -> selectedPiece = PieceType.valueOf(id.removePrefix("piece:"))
@@ -415,7 +452,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     override fun onKey(keycode: Int): Boolean {
         if (keycode != Input.Keys.BACK && keycode != Input.Keys.ESCAPE) return false
         when {
-            match.phase == Phase.OVER -> game.switchTo(MenuScreen(game))
+            match.phase == Phase.OVER -> game.switchTo(if (challenge != null) ChallengeListScreen(game) else MenuScreen(game))
             else -> paused = !paused
         }
         return true
@@ -437,6 +474,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         match = newMatch()
         computer = newComputer()
         treatsEarned = 0
+        starsEarned = 0
         unlockable = null
         particles.clear()
         popups.clear()
@@ -676,7 +714,15 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             return list
         }
         if (match.phase == Phase.OVER) {
-            if (overTime > 0.9f) {
+            val c = challenge
+            if (overTime > 0.9f && c != null) {
+                val cx = uiW / 2f
+                val next = Challenges.byNumber(c.number + 1)
+                val canGoOn = next != null && game.settings.isChallengeOpen(next.number)
+                list += Button("rematch", cx - 390f, uiH / 2f - 290f, 250f, 100f, "Retry", if (canGoOn) ButtonStyle.LIGHT else ButtonStyle.PRIMARY)
+                list += Button("levels", cx - 120f, uiH / 2f - 290f, 240f, 100f, "Levels", ButtonStyle.TEAL)
+                if (canGoOn) list += Button("next", cx + 140f, uiH / 2f - 290f, 250f, 100f, "Next", ButtonStyle.PRIMARY)
+            } else if (overTime > 0.9f) {
                 val cx = uiW / 2f
                 list += Button("rematch", cx - 390f, uiH / 2f - 290f, 290f, 100f, "Rematch", ButtonStyle.PRIMARY)
                 list += Button("pets", cx - 80f, uiH / 2f - 290f, 230f, 100f, "Pets", ButtonStyle.TEAL)
@@ -730,26 +776,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         x += controls[1] + gap
         list += Button("auto", x, y, controls[2], bh, "Auto", icon = { s, cx, cy, _ ->
             s.color = Palette.GOLD_DARK
-            star(s, cx, cy, 26f)
+            Ui.star(s, cx, cy, 26f)
         })
         x += controls[2] + gap
         list += Button("ready", x, y, controls[3], bh, "Ready!", ButtonStyle.PRIMARY)
-    }
-
-    private fun star(s: ShapeRenderer, cx: Float, cy: Float, r: Float) {
-        for (i in 0 until 5) {
-            val a = 90f + i * 72f
-            s.triangle(
-                cx, cy,
-                cx + MathUtils.cosDeg(a) * r, cy + MathUtils.sinDeg(a) * r,
-                cx + MathUtils.cosDeg(a + 36f) * r * 0.45f, cy + MathUtils.sinDeg(a + 36f) * r * 0.45f,
-            )
-            s.triangle(
-                cx, cy,
-                cx + MathUtils.cosDeg(a) * r, cy + MathUtils.sinDeg(a) * r,
-                cx + MathUtils.cosDeg(a - 36f) * r * 0.45f, cy + MathUtils.sinDeg(a - 36f) * r * 0.45f,
-            )
-        }
     }
 
     private fun addItemTray(list: MutableList<Button>, side: Side) {
@@ -836,6 +866,14 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             s.color = if (f < 0.5f) tmpColor.set(Palette.GOOD).lerp(Palette.GOLD, f * 2f) else tmpColor.set(Palette.GOLD).lerp(Palette.BAD, (f - 0.5f) * 2f)
             Ui.roundRect(s, barX, y + 18f, max(30f, barW * f), 30f, 15f)
         }
+        val c = challenge
+        if (c != null && side == Side.RIGHT) {
+            // Goal marker on the target's mess bar
+            val gx = barX + barW * c.goal / Arena.MESS_TO_LOSE
+            s.color = Palette.INK
+            s.rect(gx - 3f, y + 10f, 6f, 46f)
+            s.triangle(gx - 10f, y + 60f, gx + 10f, y + 60f, gx, y + 48f)
+        }
     }
 
     private fun windPanel() {
@@ -867,7 +905,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 val textX = if (side == Side.LEFT) x + 124f else x + 22f
                 val pet = match.pet(side)
                 Ui.textAt(batch, a.h2, pet.kind.displayName, textX, y + 78f, Palette.INK)
-                Ui.textAt(batch, a.small, "${playerLabel(side)} · ${match.throwsLeft(side)} left", textX + w - 146f, y + 78f, Palette.INK, rightAligned = true, alpha = 0.75f)
+                val c = challenge
+                val role = if (c != null && side == Side.RIGHT) "Target · goal ${c.goal.roundToInt()}%" else "${playerLabel(side)} · ${match.throwsLeft(side)} left"
+                Ui.textAt(batch, a.small, role, textX + w - 146f, y + 78f, Palette.INK, rightAligned = true, alpha = 0.75f)
                 Ui.text(batch, a.small, "Mess ${pet.mess.roundToInt()}%", textX + (w - 146f) / 2f, y + 33f, Palette.INK)
             }
             val wy = uiH - 20f - 90f
@@ -936,6 +976,15 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             return
         }
         Ui.panel(s, uiW / 2f - 430f, uiH / 2f - 310f, 860f, 640f)
+        if (challenge != null) {
+            Ui.starRow(s, uiW / 2f, uiH / 2f + 18f, 40f, starsEarned)
+            if (match.winner == Side.LEFT) {
+                icon(uiW / 2f, uiH / 2f + 128f + abs(MathUtils.sin(overTime * 4f)) * 10f, 90f) {
+                    Art.petOutlined(s, match.pet(Side.LEFT).kind, overTime, false, false, 0f)
+                }
+            }
+            return
+        }
         val winner = match.winner ?: return
         val pet = match.pet(winner)
         val bounce = abs(MathUtils.sin(overTime * 4f)) * 14f
@@ -950,6 +999,26 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         val cx = uiW / 2f
         if (paused) {
             Ui.text(batch, a.h1, "Paused", cx, uiH / 2f + 180f, Palette.WHITE)
+            return
+        }
+        val c = challenge
+        if (c != null) {
+            val won = match.winner == Side.LEFT
+            Ui.text(batch, a.title, if (won) "Level complete!" else "Out of throws", cx, uiH / 2f + 250f, Palette.WHITE, maxWidth = 800f)
+            val st = match.stats(Side.LEFT)
+            val line = if (won) {
+                "${petName(Side.RIGHT)} reached ${match.pet(Side.RIGHT).mess.roundToInt()}% in ${st.throws} throws"
+            } else {
+                "${petName(Side.RIGHT)} reached ${match.pet(Side.RIGHT).mess.roundToInt()}% of the ${c.goal.roundToInt()}% goal"
+            }
+            Ui.text(batch, a.h2, line, cx, uiH / 2f - 56f, Palette.INK, maxWidth = 780f)
+            val next = when {
+                !won -> "Tip: ${c.brief}"
+                starsEarned < 3 -> "3 stars: finish in ${c.threeStars} throws or fewer"
+                else -> "Perfect!"
+            }
+            Ui.text(batch, a.body, next, cx, uiH / 2f - 100f, Palette.INK, 0.8f, 780f)
+            if (treatsEarned > 0) Ui.text(batch, a.h2, "+$treatsEarned treats", cx, uiH / 2f - 144f, Palette.ACCENT_DARK)
             return
         }
         val winner = match.winner

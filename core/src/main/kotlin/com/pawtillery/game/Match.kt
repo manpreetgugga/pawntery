@@ -29,6 +29,8 @@ class MatchConfig(
     val rightKind: PetKind = PetKind.CAT,
     val throwsPerPlayer: Int = FULL_MATCH,
     val seed: Long = System.nanoTime(),
+    /** When set, this is a Trick Shot level: no building, and only the left player throws. */
+    val challenge: Challenge? = null,
 ) {
     companion object {
         const val FULL_MATCH = 10
@@ -114,26 +116,53 @@ class Match(val config: MatchConfig) : Disposable {
         pets = Side.entries.associateWith { side ->
             Pet(side, if (side == Side.LEFT) config.leftKind else config.rightKind, createPetBody(side)).also { it.body.userData = it }
         }
-        for (side in Side.entries) {
-            for (item in items(side)) inventory[side.ordinal][item.ordinal] = item.startCount
+        val challenge = config.challenge
+        if (challenge == null) {
+            for (side in Side.entries) {
+                for (item in items(side)) inventory[side.ordinal][item.ordinal] = item.startCount
+            }
+            events.add(MatchEvent.BuildStarted(Side.LEFT))
+        } else {
+            for ((item, n) in challenge.items) inventory[Side.LEFT.ordinal][item.ordinal] = n
+            for (p in challenge.fortPlacements()) {
+                val pos = dropPosition(Side.RIGHT, p.type, p.rotated, p.x) ?: continue
+                addPiece(p.type, Side.RIGHT, p.rotated, pos.x, pos.y)
+                // Let each piece land before the next is dropped on it.
+                repeat(40) { world.step(Arena.STEP, 8, 3) }
+            }
+            repeat(120) { world.step(Arena.STEP, 8, 3) }
+            hits.clear()
+            crushes.clear()
+            thudStrength = 0f
+            startTurn(Side.LEFT)
         }
-        events.add(MatchEvent.BuildStarted(Side.LEFT))
     }
 
     fun pet(side: Side): Pet = pets.getValue(side)
 
     /** What [side] can throw, in tray order. */
-    fun items(side: Side): List<ItemType> =
-        listOf(ItemType.MUD, ItemType.WATER, ItemType.BOWLING, pet(side).kind.signature)
+    fun items(side: Side): List<ItemType> {
+        val challenge = config.challenge
+        if (challenge != null) return if (side == Side.LEFT) challenge.items.map { it.first } else emptyList()
+        return listOf(ItemType.MUD, ItemType.WATER, ItemType.BOWLING, pet(side).kind.signature)
+    }
+
+    fun throwsAllowed(): Int = config.challenge?.maxThrows ?: config.throwsPerPlayer
 
     /** Items left; -1 means unlimited. */
     fun count(side: Side, item: ItemType): Int = inventory[side.ordinal][item.ordinal]
 
-    fun throwsLeft(side: Side): Int = config.throwsPerPlayer - throwsDone[side.ordinal]
+    fun throwsLeft(side: Side): Int = throwsAllowed() - throwsDone[side.ordinal]
 
     fun piecesLeft(side: Side): Int = Arena.PIECES_PER_PLAYER - pieces.count { it.side == side }
 
     fun lastVelocity(side: Side): Vector2? = lastVelocity[side.ordinal]
+
+    /** Stars earned in a finished Trick Shot level. */
+    fun challengeStars(): Int {
+        val c = config.challenge ?: return 0
+        return if (phase == Phase.OVER) c.stars(winner == Side.LEFT, throwsDone[Side.LEFT.ordinal]) else 0
+    }
 
     fun stats(side: Side) = ThrowStats(throwsDone[side.ordinal], throwsThatHit[side.ordinal], trickShots[side.ordinal])
 
@@ -162,11 +191,15 @@ class Match(val config: MatchConfig) : Disposable {
     fun placePiece(type: PieceType, rotated: Boolean, x: Float): Boolean {
         if (phase != Phase.BUILD || piecesLeft(turn) <= 0) return false
         val pos = dropPosition(turn, type, rotated, x) ?: return false
-        val piece = Piece(type, turn, rotated, createPieceBody(type, turn, rotated, pos.x, pos.y))
-        piece.body.userData = piece
-        pieces.add(piece)
+        addPiece(type, turn, rotated, pos.x, pos.y)
         events.add(MatchEvent.PiecePlaced(turn, type))
         return true
+    }
+
+    private fun addPiece(type: PieceType, side: Side, rotated: Boolean, x: Float, y: Float) {
+        val piece = Piece(type, side, rotated, createPieceBody(type, side, rotated, x, y))
+        piece.body.userData = piece
+        pieces.add(piece)
     }
 
     fun undoPiece(): Boolean {
@@ -280,7 +313,7 @@ class Match(val config: MatchConfig) : Disposable {
     private fun startTurn(side: Side) {
         turn = side
         phase = Phase.AIM
-        wind = if (config.easyMode) 0f else rng.nextInt(-7, 8) * 0.5f
+        wind = config.challenge?.wind ?: if (config.easyMode) 0f else rng.nextInt(-7, 8) * 0.5f
         crushThisTurn.fill(0f)
         events.add(MatchEvent.TurnStarted(side))
     }
@@ -288,6 +321,18 @@ class Match(val config: MatchConfig) : Disposable {
     private fun endTurn() {
         throwsDone[turn.ordinal]++
         if (throwHit) throwsThatHit[turn.ordinal]++
+        val challenge = config.challenge
+        if (challenge != null) {
+            val reached = pet(Side.RIGHT).mess >= challenge.goal
+            if (reached || throwsLeft(Side.LEFT) <= 0) {
+                phase = Phase.OVER
+                winner = if (reached) Side.LEFT else Side.RIGHT
+                events.add(MatchEvent.GameOver(winner))
+            } else {
+                startTurn(Side.LEFT)
+            }
+            return
+        }
         val l = pet(Side.LEFT).mess
         val r = pet(Side.RIGHT).mess
         val someoneLost = l >= Arena.MESS_TO_LOSE || r >= Arena.MESS_TO_LOSE

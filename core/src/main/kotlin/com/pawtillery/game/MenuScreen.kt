@@ -81,8 +81,10 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         if (showHelp) return listOf(Button("help_close", cx - 160f, 70f, 320f, 92f, "Got it!", ButtonStyle.PRIMARY))
         val easy = game.settings.easyMode
         return listOf(
-            Button("play_ai", cx - 290f, uiH / 2f - 20f, 580f, 108f, "Play vs Computer", ButtonStyle.PRIMARY),
-            Button("play_2p", cx - 290f, uiH / 2f - 150f, 580f, 108f, "2 Players · One Phone", ButtonStyle.TEAL),
+            Button("play_ai", cx - 290f, uiH / 2f + 10f, 580f, 100f, "Play vs Computer", ButtonStyle.PRIMARY),
+            Button("play_2p", cx - 290f, uiH / 2f - 105f, 580f, 100f, "2 Players · One Phone", ButtonStyle.TEAL),
+            Button("tricks", cx - 290f, uiH / 2f - 220f, 580f, 100f, "Trick Shots", ButtonStyle.GOLD,
+                sublabel = "${game.settings.totalStars} of ${Challenges.all.size * 3} stars"),
             Button("mode", cx - 420f, 56f, 340f, 100f, if (easy) "Easy" else "Pro", ButtonStyle.GOLD,
                 sublabel = if (easy) "Aim guide on, no wind" else "Wind + short aim guide"),
             Button("sound", cx - 60f, 56f, 220f, 100f, if (game.settings.sound) "Sound on" else "Sound off"),
@@ -116,6 +118,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         when (id) {
             "play_ai" -> game.switchTo(PetSelectScreen(game, twoPlayers = false))
             "play_2p" -> game.switchTo(PetSelectScreen(game, twoPlayers = true))
+            "tricks" -> game.switchTo(ChallengeListScreen(game))
             "mode" -> game.settings.easyMode = !game.settings.easyMode
             "sound" -> game.settings.sound = !game.settings.sound
             "help" -> showHelp = true

@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.GlyphLayout
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
+import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.utils.Align
 
 enum class ButtonStyle(val fill: Color, val edge: Color, val text: Color) {
@@ -52,6 +53,28 @@ object Ui {
         s.arc(x + w - rr, y + rr, rr, 270f, 90f, 8)
         s.arc(x + w - rr, y + h - rr, rr, 0f, 90f, 8)
         s.arc(x + rr, y + h - rr, rr, 90f, 90f, 8)
+    }
+
+    /** A five-pointed star centered on (cx, cy) with outer radius [r]. */
+    fun star(s: ShapeRenderer, cx: Float, cy: Float, r: Float) {
+        for (i in 0 until 5) {
+            val a = 90f + i * 72f
+            val ox = cx + MathUtils.cosDeg(a) * r
+            val oy = cy + MathUtils.sinDeg(a) * r
+            s.triangle(cx, cy, ox, oy, cx + MathUtils.cosDeg(a + 36f) * r * 0.45f, cy + MathUtils.sinDeg(a + 36f) * r * 0.45f)
+            s.triangle(cx, cy, ox, oy, cx + MathUtils.cosDeg(a - 36f) * r * 0.45f, cy + MathUtils.sinDeg(a - 36f) * r * 0.45f)
+        }
+    }
+
+    /** A row of three stars, [earned] of them gold, centered on (cx, cy). */
+    fun starRow(s: ShapeRenderer, cx: Float, cy: Float, r: Float, earned: Int) {
+        for (i in 0 until 3) {
+            val x = cx + (i - 1) * r * 2.3f
+            s.color = Palette.INK
+            star(s, x, cy, r * 1.18f)
+            s.color = if (i < earned) Palette.GOLD else Palette.PANEL_EDGE
+            star(s, x, cy, r)
+        }
     }
 
     fun panel(s: ShapeRenderer, x: Float, y: Float, w: Float, h: Float, fill: Color = Palette.PANEL, edge: Color = Palette.PANEL_EDGE, r: Float = 22f) {

@@ -13,6 +13,7 @@ import com.badlogic.gdx.utils.ScreenUtils
 import com.pawtillery.game.BaseScreen
 import com.pawtillery.game.GameScreen
 import com.pawtillery.game.MatchSetup
+import com.pawtillery.game.MenuScreen
 import com.pawtillery.game.PetKind
 import com.pawtillery.game.Side
 import com.pawtillery.game.Pawtillery
@@ -39,6 +40,12 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         val p = screen.buttonOnScreen(id) ?: error("No button '$id' on ${screen::class.simpleName}")
         Gdx.input.inputProcessor.touchDown(p.x.toInt(), p.y.toInt(), 0, Input.Buttons.LEFT)
         Gdx.input.inputProcessor.touchUp(p.x.toInt(), p.y.toInt(), 0, Input.Buttons.LEFT)
+    }
+
+    /** Aims and throws like a sharp player would, by setting the aim through the angle/power buttons' state. */
+    private fun throwComputerShot() {
+        val gs = game.screen as? GameScreen ?: return
+        gs.devAutoThrow()
     }
 
     private fun down(p: Vector2) = Gdx.input.inputProcessor.touchDown(p.x.toInt(), p.y.toInt(), 0, Input.Buttons.LEFT)
@@ -90,7 +97,19 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(27f) { shot("15-bunny-vs-turtle") }
         at(30f) { shot("16-bunny-vs-turtle-later") }
         at(62f) { shot("17-game-over") }
-        at(62.1f) { Gdx.app.exit() }
+        // Trick Shots: the level list, a level, and its result.
+        at(62.2f) { game.switchTo(MenuScreen(game)) }
+        at(62.8f) { tap("tricks") }
+        at(63.4f) { shot("18-trick-shot-levels") }
+        at(63.5f) { tap("level:1") }
+        at(64.6f) { shot("19-level-1") }
+        at(64.7f) { throwComputerShot() }
+        at(68.5f) { throwComputerShot() }
+        at(72.5f) { throwComputerShot() }
+        at(76.5f) { throwComputerShot() }
+        at(80.5f) { throwComputerShot() }
+        at(84.5f) { shot("20-level-result") }
+        at(84.6f) { Gdx.app.exit() }
     }
 
     override fun render() {

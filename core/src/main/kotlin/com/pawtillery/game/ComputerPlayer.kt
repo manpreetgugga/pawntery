@@ -23,7 +23,14 @@ class ShotPlan(val item: ItemType, val vx: Float, val vy: Float, val splitAtApex
  * The computer opponent. It searches throws with [Trajectory] (so it plays by the same physics as
  * the player), then adds aiming error for its [level]; below Champion it also eases off when far ahead.
  */
-class ComputerPlayer(private val rng: Random, private val level: ComputerLevel) {
+class ComputerPlayer(
+    private val rng: Random,
+    private val baseAngleError: Float,
+    private val baseSpeedError: Float,
+    private val easesOff: Boolean,
+) {
+    constructor(rng: Random, level: ComputerLevel) : this(rng, level.angleError, level.speedError, level.easesOff)
+
 
     private enum class Stop { PET, PIECE, FENCE, GROUND, OUT }
 
@@ -67,10 +74,10 @@ class ComputerPlayer(private val rng: Random, private val level: ComputerLevel) 
         val blockers = match.pieces.filter { it.side == side.other }.map { match.bodyBounds(it.body, Rectangle()) }
         val available = match.items(side).filter { match.count(side, it) != 0 }
         val signature = match.pet(side).kind.signature
-        angleError = level.angleError
-        speedError = level.speedError
+        angleError = baseAngleError
+        speedError = baseSpeedError
         // Ease off when far ahead so a losing player can catch up.
-        if (level.easesOff && match.pet(side).mess + 30f < match.pet(side.other).mess) {
+        if (easesOff && match.pet(side).mess + 30f < match.pet(side.other).mess) {
             angleError *= 1.6f
             speedError *= 1.6f
         }

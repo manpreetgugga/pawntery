@@ -9,7 +9,12 @@ class MatchSetup(
     val computer: Set<Side>,
     val throwsPerPlayer: Int,
     val level: ComputerLevel = ComputerLevel.NORMAL,
-)
+    val challenge: Challenge? = null,
+) {
+    companion object {
+        fun forChallenge(c: Challenge) = MatchSetup(c.player, c.target, setOf(Side.RIGHT), c.maxThrows, challenge = c)
+    }
+}
 
 /**
  * Pick a pet (each player in turn for two players). Locked pets show their price in treats and can

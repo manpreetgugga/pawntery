@@ -77,6 +77,24 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         return earned
     }
 
+    fun challengeStars(number: Int): Int = prefs.getInteger("challenge.$number.stars", 0)
+
+    val totalStars: Int get() = Challenges.all.sumOf { challengeStars(it.number) }
+
+    /** Levels open one at a time: each needs at least one star on the level before it. */
+    fun isChallengeOpen(number: Int): Boolean = number == 1 || challengeStars(number - 1) > 0
+
+    /** Saves a level result and returns the treats for newly earned stars (10 each). */
+    fun recordChallenge(number: Int, stars: Int): Int {
+        val before = challengeStars(number)
+        if (stars <= before) return 0
+        val earned = (stars - before) * 10
+        prefs.putInteger("challenge.$number.stars", stars)
+        prefs.putInteger("treats", treats + earned)
+        prefs.flush()
+        return earned
+    }
+
     private inline fun save(change: () -> Unit) {
         change()
         prefs.flush()
