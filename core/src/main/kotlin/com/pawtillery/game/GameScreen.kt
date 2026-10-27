@@ -88,6 +88,24 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     private fun newComputer() = ComputerPlayer(Random(System.nanoTime()), setup.level)
 
+    override fun music() = game.assets.matchMusic
+
+    private val voiceCooldown = FloatArray(2)
+
+    /** Each pet's own cry when it gets splatted. */
+    private fun petVoice(side: Side) {
+        if (voiceCooldown[side.ordinal] > 0f) return
+        voiceCooldown[side.ordinal] = 0.6f
+        val pitch = 0.95f + MathUtils.random(0.1f)
+        when (match.pet(side).kind) {
+            PetKind.DOG -> game.sfx("woof", 0.8f, pitch)
+            PetKind.CAT -> game.sfx("meow", 0.8f, pitch)
+            PetKind.BUNNY -> game.sfx("squeak", 0.7f, pitch * 1.25f)
+            PetKind.TURTLE -> game.sfx("squeak", 0.7f, pitch * 0.7f)
+            PetKind.PARROT -> game.sfx("chirp", 0.7f, pitch)
+        }
+    }
+
     private fun isHuman(side: Side) = side !in setup.computer
 
     private fun petName(side: Side) = match.pet(side).kind.displayName
@@ -124,6 +142,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         updateEffects(dt)
         updateHeldButton(realDt)
         for (i in hop.indices) if (hop[i] > 0f) hop[i] -= dt
+        for (i in voiceCooldown.indices) if (voiceCooldown[i] > 0f) voiceCooldown[i] -= realDt
         bannerTime -= realDt
         hintTime -= realDt
         shake = max(0f, shake - realDt * 2.5f)
@@ -242,7 +261,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             }
             is MatchEvent.PetHit -> {
                 val amount = e.amount.roundToInt()
-                game.sfx("bonk", 0.9f, 0.9f + MathUtils.random(0.25f))
+                game.sfx("bonk", 0.7f, 0.9f + MathUtils.random(0.25f))
+                if (amount >= 4) petVoice(e.side)
                 game.buzz(if (amount >= 12) 60 else 25)
                 if (amount >= 2) popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
                 when {

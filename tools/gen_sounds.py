@@ -139,6 +139,46 @@ def boing():
     return apply_env(out, 0.01, 1.3)
 
 
+def voice(f0_curve, seconds, cutoff_curve, vibrato=0.0, breath=0.0):
+    """A cartoon animal voice: a buzzy pitched tone through a moving low-pass filter."""
+    total = n(seconds)
+    phase, raw, cut = 0.0, [], []
+    for i in range(total):
+        p = i / total
+        f = f0_curve(p) * (1 + vibrato * math.sin(2 * math.pi * 5.5 * i / RATE))
+        phase += f / RATE
+        saw = 2 * (phase % 1.0) - 1
+        raw.append(saw + breath * rng.uniform(-1, 1))
+        cut.append(cutoff_curve(p))
+    return lowpass(lowpass(raw, cut), cut)
+
+
+def woof():
+    one = voice(lambda p: 330 - 140 * p, 0.17, lambda p: 1500 - 900 * p, breath=0.35)
+    one = apply_env(one, 0.06, 1.6)
+    gap = [0.0] * n(0.05)
+    two = apply_env(voice(lambda p: 300 - 120 * p, 0.15, lambda p: 1300 - 800 * p, breath=0.35), 0.06, 1.6)
+    return one + gap + gain(two, 0.8)
+
+
+def meow():
+    def f0(p):
+        return 480 + 220 * math.sin(math.pi * min(1.0, p * 1.4)) - 120 * max(0.0, p - 0.6)
+
+    def cutoff(p):
+        return 700 + 2400 * math.sin(math.pi * min(1.0, p * 1.2))
+
+    return apply_env(voice(f0, 0.5, cutoff, vibrato=0.02), 0.15, 0.8)
+
+
+def squeak(base):
+    return apply_env(sweep(base, base * 1.6, 0.16, soft_square), 0.02, 1.2)
+
+
+def chirp():
+    return squeak(1500) + [0.0] * n(0.04) + squeak(1800)
+
+
 if __name__ == "__main__":
     write("throw.wav", throw(), 0.6)
     write("splat.wav", splat())
@@ -149,3 +189,7 @@ if __name__ == "__main__":
     write("click.wav", click(), 0.5)
     write("win.wav", win(), 0.6)
     write("boing.wav", boing(), 0.6)
+    write("woof.wav", woof(), 0.75)
+    write("meow.wav", meow(), 0.7)
+    write("squeak.wav", squeak(950), 0.55)
+    write("chirp.wav", chirp(), 0.55)

@@ -66,6 +66,20 @@ class ProgressTest {
     }
 
     @Test
+    fun resetClearsProgressButKeepsPlusAndSettings() {
+        settings.addTreats(100)
+        settings.recordChallenge(1, 2)
+        settings.plus = true
+        settings.music = false
+        settings.resetProgress()
+        assertEquals(0, settings.treats)
+        assertEquals(0, settings.totalStars)
+        assertTrue(settings.plus)
+        assertFalse(settings.music)
+        assertTrue(settings.sound)
+    }
+
+    @Test
     fun parentGateNeedsTheRightAnswer() {
         val gate = ParentGate(Random(4))
         assertTrue(gate.a in 6..9 && gate.b in 6..9)

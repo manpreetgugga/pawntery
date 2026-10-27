@@ -87,7 +87,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
                 sublabel = "${game.settings.totalStars} of ${Challenges.all.size * 3} stars"),
             Button("mode", cx - 500f, 56f, 300f, 100f, if (easy) "Easy" else "Pro", ButtonStyle.GOLD,
                 sublabel = if (easy) "Aim guide on, no wind" else "Wind + short aim guide"),
-            Button("sound", cx - 180f, 56f, 210f, 100f, if (game.settings.sound) "Sound on" else "Sound off"),
+            Button("settings", cx - 180f, 56f, 210f, 100f, "Settings"),
             Button("help", cx + 50f, 56f, 230f, 100f, "How to play"),
             Button("shop", cx + 300f, 56f, 200f, 100f, "Shop", ButtonStyle.TEAL),
         )
@@ -121,7 +121,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             "play_2p" -> game.switchTo(PetSelectScreen(game, twoPlayers = true))
             "tricks" -> game.switchTo(ChallengeListScreen(game))
             "mode" -> game.settings.easyMode = !game.settings.easyMode
-            "sound" -> game.settings.sound = !game.settings.sound
+            "settings" -> game.switchTo(SettingsScreen(game))
             "help" -> showHelp = true
             "shop" -> game.switchTo(ShopScreen(game))
             "help_close" -> showHelp = false

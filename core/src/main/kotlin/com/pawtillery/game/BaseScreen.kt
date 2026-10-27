@@ -3,6 +3,7 @@ package com.pawtillery.game
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.InputAdapter
 import com.badlogic.gdx.ScreenAdapter
+import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
@@ -77,7 +78,11 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
 
     override fun show() {
         Gdx.input.inputProcessor = input
+        game.playMusic(music())
     }
+
+    /** The background music for this screen. */
+    protected open fun music(): Music? = game.assets.menuMusic
 
     override fun resize(width: Int, height: Int) {
         worldView.update(width, height, false)

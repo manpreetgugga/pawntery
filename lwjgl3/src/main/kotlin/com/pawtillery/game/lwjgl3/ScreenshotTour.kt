@@ -119,7 +119,13 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(88.6f) { tap("gate:4"); tap("gate:2") }
         at(88.8f) { shot("24-parent-gate") }
         at(88.9f) { tap("gate:cancel") }
-        at(89.2f) { Gdx.app.exit() }
+        at(89.0f) { game.switchTo(MenuScreen(game)) }
+        at(89.6f) { tap("settings") }
+        at(90.2f) { shot("25-settings") }
+        at(90.3f) { tap("reset") }
+        at(90.6f) { shot("26-reset-confirm") }
+        at(90.7f) { tap("reset_no") }
+        at(91f) { Gdx.app.exit() }
     }
 
     override fun render() {

@@ -4,6 +4,7 @@ import com.badlogic.gdx.Game
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.Screen
+import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 
@@ -34,8 +35,20 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
     }
 
     fun buzz(milliseconds: Int) {
-        if (settings.sound) Gdx.input.vibrate(milliseconds)
+        if (settings.vibration) Gdx.input.vibrate(milliseconds)
     }
+
+    private var wantedMusic: Music? = null
+
+    /** Plays [track] (or nothing) as background music, respecting the Music setting. */
+    fun playMusic(track: Music?) {
+        wantedMusic = track
+        for (m in listOf(assets.menuMusic, assets.matchMusic)) if (m !== track || !settings.music) m.stop()
+        if (track != null && settings.music && !track.isPlaying) track.play()
+    }
+
+    /** Applies a change to the Music setting right away. */
+    fun refreshMusic() = playMusic(wantedMusic)
 
     /** Shows [next] and frees the screen it replaces. */
     fun switchTo(next: Screen) {
@@ -49,5 +62,10 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
         assets.dispose()
         shapes.dispose()
         batch.dispose()
+    }
+
+    companion object {
+        /** Keep in step with versionName in android/build.gradle.kts. */
+        const val VERSION = "0.1.0"
     }
 }

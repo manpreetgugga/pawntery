@@ -1,6 +1,7 @@
 package com.pawtillery.game
 
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.audio.Sound
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.Texture
@@ -23,6 +24,8 @@ class Assets : Disposable {
     lateinit var body: BitmapFont
     lateinit var small: BitmapFont
     private val sounds = HashMap<String, Sound>()
+    lateinit var menuMusic: Music
+    lateinit var matchMusic: Music
 
     fun load() {
         val scale = max(0.5f, minOf(Gdx.graphics.width / UI_WIDTH, Gdx.graphics.height / UI_HEIGHT))
@@ -35,10 +38,17 @@ class Assets : Disposable {
         body = font(text, 30, scale)
         small = font(text, 23, scale)
         for (name in SOUND_NAMES) sounds[name] = Gdx.audio.newSound(Gdx.files.internal("sounds/$name.wav"))
+        menuMusic = loop("music/menu.ogg")
+        matchMusic = loop("music/match.ogg")
     }
 
     fun play(name: String, volume: Float = 1f, pitch: Float = 1f) {
         sounds[name]?.play(volume.coerceIn(0f, 1f), pitch.coerceIn(0.5f, 2f), 0f)
+    }
+
+    private fun loop(path: String): Music = Gdx.audio.newMusic(Gdx.files.internal(path)).apply {
+        isLooping = true
+        volume = MUSIC_VOLUME
     }
 
     private fun font(file: String, size: Int, scale: Float, border: Float = 0f): BitmapFont {
@@ -66,11 +76,16 @@ class Assets : Disposable {
     override fun dispose() {
         listOf(title, h1, h2, label, body, small).forEach { it.dispose() }
         sounds.values.forEach { it.dispose() }
+        menuMusic.dispose()
+        matchMusic.dispose()
     }
 
     companion object {
         const val UI_WIDTH = 1600f
         const val UI_HEIGHT = 900f
-        private val SOUND_NAMES = listOf("throw", "splat", "thud", "bonk", "pop", "place", "click", "win", "boing")
+        const val MUSIC_VOLUME = 0.45f
+        private val SOUND_NAMES = listOf(
+            "throw", "splat", "thud", "bonk", "pop", "place", "click", "win", "boing", "woof", "meow", "squeak", "chirp",
+        )
     }
 }

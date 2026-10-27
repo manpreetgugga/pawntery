@@ -11,10 +11,28 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         get() = prefs.getBoolean("easyMode", true)
         set(value) = save { prefs.putBoolean("easyMode", value) }
 
-    /** Sound effects and vibration. */
+    /** Sound effects. */
     var sound: Boolean
         get() = prefs.getBoolean("sound", true)
         set(value) = save { prefs.putBoolean("sound", value) }
+
+    var music: Boolean
+        get() = prefs.getBoolean("music", true)
+        set(value) = save { prefs.putBoolean("music", value) }
+
+    /** A short buzz on hits, on phones that can vibrate. */
+    var vibration: Boolean
+        get() = prefs.getBoolean("vibration", true)
+        set(value) = save { prefs.putBoolean("vibration", value) }
+
+    /** Clears all progress (treats, pets, stars, stats) but keeps Plus and the sound settings. */
+    fun resetProgress() {
+        val keep = listOf("plus", "sound", "music", "vibration", "easyMode")
+        val saved = keep.associateWith { prefs.getBoolean(it, it != "plus") }
+        prefs.clear()
+        saved.forEach { (k, v) -> prefs.putBoolean(k, v) }
+        prefs.flush()
+    }
 
     /** Quick matches are 5 throws each instead of 10. */
     var quickMatch: Boolean

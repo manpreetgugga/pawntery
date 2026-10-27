@@ -59,7 +59,8 @@ From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK 
 | `android/` | Android launcher, manifest, icon |
 | `lwjgl3/` | Desktop window for quick testing on a computer (`./gradlew :lwjgl3:run`) |
 | `assets/` | Fonts and sound effects shared by both |
-| `tools/gen_sounds.py` | Regenerates the sound effects (`python3 tools/gen_sounds.py`) |
+| `tools/gen_sounds.py` | Regenerates the sound effects and pet voices (`python3 tools/gen_sounds.py`, standard library only) |
+| `tools/gen_music.py` | Regenerates the two music loops (`python3 tools/gen_music.py`, needs numpy and ffmpeg) |
 
 Run the unit tests with `./gradlew :core:test`. They play full computer-vs-computer matches on the real physics.
 
@@ -70,4 +71,4 @@ No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-b
 ## Credits
 
 - Fonts: [Titan One](https://fonts.google.com/specimen/Titan+One) and [Varela Round](https://fonts.google.com/specimen/Varela+Round), both under the SIL Open Font License (`assets/fonts/*-OFL.txt`).
-- All art is drawn in code and all sounds are synthesized by `tools/gen_sounds.py`.
+- All art is drawn in code. Sound effects, pet voices and the two music loops are synthesized by `tools/gen_sounds.py` and `tools/gen_music.py`. A composer's soundtrack is an easy upgrade later: replace `assets/music/menu.ogg` and `match.ogg`.
