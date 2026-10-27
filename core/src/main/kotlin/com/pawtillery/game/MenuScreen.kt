@@ -108,9 +108,9 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         Ui.text(batch, a.h1, "How to play", cx, uiH - 120f, Palette.WHITE)
         val steps = listOf(
             "1. Build: tap a piece, then touch your yard to drop it. Up to 6 pieces shield your pet.",
-            "2. Throw: drag back anywhere and let go. Further back throws harder.",
-            "3. Splat the other pet! Every hit fills their mess meter.",
-            "4. A pet at 100% mess loses. After 10 throws each, the cleaner pet wins.",
+            "2. Throw: drag back anywhere and let go, or set angle and power with + and - and tap Throw.",
+            "3. Splat the other pet! Every hit fills their mess meter. 100% messy loses.",
+            "4. Trick shots, Trick Shot levels and the Daily earn treats. Spend them on new pets.",
             "Bowling balls smash forts, water balloons soak around walls, and each pet has a special throw.",
         )
         var y = uiH - 200f
