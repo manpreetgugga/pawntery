@@ -43,7 +43,8 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             s.color = Palette.SHADE
             Ui.roundRect(s, uiW / 2f - 330f, uiH - 268f, 660f, 58f, 29f)
         }
-        if (showHelp) drawHelpPanel() else Ui.buttons(s, buttons, pressedId)
+        if (showHelp) drawHelpPanel()
+        Ui.buttons(s, buttons, pressedId)
         s.end()
         beginUiText()
         if (showHelp) {
@@ -67,7 +68,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         val s = shapes
         s.identity()
         s.translate(x, Arena.GROUND_Y + Arena.PET_H / 2f, 0f)
-        s.scale(side.dir, 1f, 1f)
+        s.scale(side.dir * Arena.PET_ART_SCALE, Arena.PET_ART_SCALE, 1f)
         val hit = side == Side.RIGHT && (time % 2.6f) in 2.15f..2.6f
         Art.petShape(s, kind, time + side.ordinal, hit, (time + side.ordinal) % 3.3f < 0.12f, 0f)
         s.identity()
@@ -94,7 +95,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
     private fun drawHelpText() {
         val a = game.assets
         val cx = uiW / 2f
-        Ui.text(batch, a.h1, "How to play", cx, uiH - 120f, Palette.INK)
+        Ui.text(batch, a.h1, "How to play", cx, uiH - 120f, Palette.WHITE)
         val steps = listOf(
             "1. Build: tap a piece, then touch your yard to drop it. Up to 6 pieces shield your pet.",
             "2. Throw: drag back anywhere and let go. Further back throws harder.",

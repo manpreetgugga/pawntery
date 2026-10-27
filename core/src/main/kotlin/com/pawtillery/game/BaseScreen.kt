@@ -16,7 +16,7 @@ import com.badlogic.gdx.utils.viewport.ExtendViewport
  */
 abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     protected val worldCam = OrthographicCamera()
-    protected val worldView = ExtendViewport(Arena.WIDTH, Arena.HEIGHT, worldCam)
+    protected val worldView = ExtendViewport(Arena.WIDTH, Arena.VIEW_HEIGHT, worldCam)
     protected val uiCam = OrthographicCamera()
     protected val uiView = ExtendViewport(Assets.UI_WIDTH, Assets.UI_HEIGHT, uiCam)
     protected val shapes: ShapeRenderer get() = game.shapes
@@ -30,7 +30,8 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     protected val uiH: Float get() = uiView.worldHeight
     protected val viewLeft: Float get() = worldCam.position.x - worldView.worldWidth / 2f
     protected val viewRight: Float get() = worldCam.position.x + worldView.worldWidth / 2f
-    protected val viewTop: Float get() = worldView.worldHeight
+    protected val viewTop: Float get() = Arena.VIEW_BOTTOM + worldView.worldHeight
+    protected val viewBottom: Float get() = Arena.VIEW_BOTTOM
 
     private val input = object : InputAdapter() {
         override fun touchDown(screenX: Int, screenY: Int, pointer: Int, button: Int): Boolean {
@@ -78,7 +79,7 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
 
     override fun resize(width: Int, height: Int) {
         worldView.update(width, height, false)
-        worldCam.position.set(Arena.WIDTH / 2f, worldView.worldHeight / 2f, 0f)
+        worldCam.position.set(Arena.WIDTH / 2f, Arena.VIEW_BOTTOM + worldView.worldHeight / 2f, 0f)
         worldCam.update()
         uiView.update(width, height, true)
     }
@@ -124,6 +125,25 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
         shapes.scale(metersToUi, metersToUi, 1f)
         draw()
         shapes.identity()
+    }
+
+    /** Screen-pixel center (y down, like touches) of a visible button, for automated UI tours. */
+    fun buttonOnScreen(id: String): Vector2? {
+        val b = buttons.firstOrNull { it.id == id } ?: return null
+        val p = uiView.project(Vector2(b.x + b.w / 2f, b.y + b.h / 2f))
+        return p.set(p.x, Gdx.graphics.height - p.y)
+    }
+
+    /** Screen-pixel position (y down) of a point in the backyard, for automated UI tours. */
+    fun worldOnScreen(x: Float, y: Float): Vector2 {
+        val p = worldView.project(Vector2(x, y))
+        return p.set(p.x, Gdx.graphics.height - p.y)
+    }
+
+    /** Screen-pixel position (y down) of a point in UI units, for automated UI tours. */
+    fun uiOnScreen(x: Float, y: Float): Vector2 {
+        val p = uiView.project(Vector2(x, y))
+        return p.set(p.x, Gdx.graphics.height - p.y)
     }
 
     open fun onPress(ui: Vector2, world: Vector2) = Unit

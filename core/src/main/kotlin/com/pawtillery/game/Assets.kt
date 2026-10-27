@@ -18,6 +18,8 @@ class Assets : Disposable {
     lateinit var title: BitmapFont
     lateinit var h1: BitmapFont
     lateinit var h2: BitmapFont
+    /** Like h2 but outlined, for text drawn over the backyard. */
+    lateinit var label: BitmapFont
     lateinit var body: BitmapFont
     lateinit var small: BitmapFont
     private val sounds = HashMap<String, Sound>()
@@ -29,6 +31,7 @@ class Assets : Disposable {
         title = font(display, 108, scale, border = 5f)
         h1 = font(display, 56, scale, border = 3.5f)
         h2 = font(display, 38, scale)
+        label = font(display, 40, scale, border = 3f)
         body = font(text, 30, scale)
         small = font(text, 23, scale)
         for (name in SOUND_NAMES) sounds[name] = Gdx.audio.newSound(Gdx.files.internal("sounds/$name.wav"))
@@ -61,7 +64,7 @@ class Assets : Disposable {
     }
 
     override fun dispose() {
-        listOf(title, h1, h2, body, small).forEach { it.dispose() }
+        listOf(title, h1, h2, label, body, small).forEach { it.dispose() }
         sounds.values.forEach { it.dispose() }
     }
 

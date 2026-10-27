@@ -160,7 +160,7 @@ class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
     private fun fly(match: Match, side: Side, item: ItemType, vx: Float, vy: Float, target: Vector2, blockers: List<Rectangle>): Result {
         val origin = Arena.launchPoint(side)
         val r = item.radius
-        val petReach = 0.62f + r
+        val petReach = Arena.PET_W * 0.55f + r
         var result = Result(Stop.OUT, origin.x, origin.y)
         Trajectory.simulate(origin.x, origin.y, vx, vy, item, side, match.wind, 480) { _, x, y, _, _ ->
             val stop = when {

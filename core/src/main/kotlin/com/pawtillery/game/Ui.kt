@@ -43,14 +43,15 @@ object Ui {
     private const val DEPTH = 7f
 
     fun roundRect(s: ShapeRenderer, x: Float, y: Float, w: Float, h: Float, r: Float) {
+        // Pieces must not overlap, or translucent fills would darken where they do.
         val rr = minOf(r, w / 2f, h / 2f)
         s.rect(x + rr, y, w - 2f * rr, h)
         s.rect(x, y + rr, rr, h - 2f * rr)
         s.rect(x + w - rr, y + rr, rr, h - 2f * rr)
-        s.circle(x + rr, y + rr, rr, 16)
-        s.circle(x + w - rr, y + rr, rr, 16)
-        s.circle(x + rr, y + h - rr, rr, 16)
-        s.circle(x + w - rr, y + h - rr, rr, 16)
+        s.arc(x + rr, y + rr, rr, 180f, 90f, 8)
+        s.arc(x + w - rr, y + rr, rr, 270f, 90f, 8)
+        s.arc(x + w - rr, y + h - rr, rr, 0f, 90f, 8)
+        s.arc(x + rr, y + h - rr, rr, 90f, 90f, 8)
     }
 
     fun panel(s: ShapeRenderer, x: Float, y: Float, w: Float, h: Float, fill: Color = Palette.PANEL, edge: Color = Palette.PANEL_EDGE, r: Float = 22f) {

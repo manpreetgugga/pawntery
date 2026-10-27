@@ -35,5 +35,14 @@ application {
 }
 
 tasks.named<JavaExec>("run") {
-    workingDir = rootProject.file("assets")
+    workingDir = file("../assets")
+}
+
+tasks.register<JavaExec>("tour") {
+    group = "verification"
+    description = "Plays a scripted session and saves screenshots: --args=\"<out-dir> <width> <height>\""
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.pawtillery.game.lwjgl3.ScreenshotTourKt")
+    workingDir = file("../assets")
+    jvmArgs(application.applicationDefaultJvmArgs)
 }

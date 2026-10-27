@@ -198,8 +198,8 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 game.sfx("bonk", 0.9f, 0.9f + MathUtils.random(0.25f))
                 game.buzz(if (amount >= 12) 60 else 25)
                 popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
-                if (amount >= 14) popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 1.5f, Palette.GOLD, 1.3f, true))
-                if (e.item == null && amount >= 3) popups.add(Popup("Bonk!", e.x, e.y + 1.5f, Palette.WHITE, 1f, true))
+                if (amount >= 14) popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true))
+                if (e.item == null && amount >= 3) popups.add(Popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true))
                 shake = max(shake, 0.25f)
             }
             is MatchEvent.Thud -> {
@@ -370,7 +370,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         clear()
         worldCam.position.set(
             Arena.WIDTH / 2f + if (shake > 0f) MathUtils.random(-1f, 1f) * shake * 0.3f else 0f,
-            worldView.worldHeight / 2f + if (shake > 0f) MathUtils.random(-1f, 1f) * shake * 0.3f else 0f,
+            Arena.VIEW_BOTTOM + worldView.worldHeight / 2f + if (shake > 0f) MathUtils.random(-1f, 1f) * shake * 0.3f else 0f,
             0f,
         )
         worldCam.update()
@@ -544,7 +544,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
     private fun drawTurnMarker() {
         if (match.phase != Phase.AIM) return
         val pos = match.pet(match.turn).body.position
-        val y = pos.y + Arena.PET_H / 2f + 1.15f + MathUtils.sin(match.time * 5f) * 0.15f
+        val y = Arena.GROUND_Y + Arena.LAUNCH_HEIGHT + 1.2f + MathUtils.sin(match.time * 5f) * 0.15f
         val s = shapes
         s.color = Palette.INK
         s.triangle(pos.x - 0.42f, y + 0.08f, pos.x + 0.42f, y + 0.08f, pos.x, y - 0.5f)
@@ -662,16 +662,21 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
             s.color = Palette.SHADE
             Ui.roundRect(s, uiW / 2f - 470f, uiH - 22f - 118f - 72f, 940f, 52f, 26f)
         }
-        val side = match.turn
-        if (match.phase == Phase.AIM && isHuman(side) && !aiming && hintTime <= 0f) {
+        if (match.phase != Phase.BUILD && tip() != null) {
             s.color = Palette.SHADE
-            Ui.roundRect(s, uiW / 2f - 380f, 24f + 124f + 22f, 760f, 48f, 24f)
-        }
-        if (hintTime > 0f) {
-            s.color = Palette.SHADE
-            Ui.roundRect(s, uiW / 2f - 440f, uiH * 0.36f - 30f, 880f, 60f, 30f)
+            Ui.roundRect(s, uiW / 2f - 400f, TIP_Y - 25f, 800f, 50f, 25f)
         }
     }
+
+    /** The one-line tip under the wind panel: a fresh hint, the first-throw tip, or what the item does. */
+    private fun tip(): String? {
+        if (hintTime > 0f) return hintText
+        val side = match.turn
+        if (match.phase != Phase.AIM || !isHuman(side) || aiming) return null
+        return if (!game.settings.aimTipSeen) "Drag back anywhere and let go to throw" else selectedItem[side.ordinal].hint
+    }
+
+    private val TIP_Y: Float get() = uiH - 20f - 90f - 64f
 
     private fun petPanel(side: Side) {
         val s = shapes
@@ -734,7 +739,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 val textX = if (side == Side.LEFT) x + 124f else x + 22f
                 val pet = match.pet(side)
                 Ui.textAt(batch, a.h2, pet.kind.displayName, textX, y + 78f, Palette.INK)
-                Ui.textAt(batch, a.small, "${playerLabel(side)} · ${match.throwsLeft(side)} throws left", textX + w - 146f, y + 78f, Palette.INK, rightAligned = true, alpha = 0.75f)
+                Ui.textAt(batch, a.small, "${playerLabel(side)} · ${match.throwsLeft(side)} left", textX + w - 146f, y + 78f, Palette.INK, rightAligned = true, alpha = 0.75f)
                 Ui.text(batch, a.small, "Mess ${pet.mess.roundToInt()}%", textX + (w - 146f) / 2f, y + 33f, Palette.INK)
             }
             val wy = uiH - 20f - 90f
@@ -746,28 +751,32 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
             Ui.text(batch, a.small, label, uiW / 2f, wy + (if (match.wind != 0f) 66f else 45f), Palette.INK)
         } else if (isHuman(match.turn) && buildQueue.isEmpty()) {
             val left = match.piecesLeft(match.turn)
-            val msg = if (left > 0) "Tap a piece, then touch your yard to drop it  ·  $left left" else "Fort done! Tap Ready when you like it"
+            val msg = when {
+                hintTime > 0f -> hintText
+                left > 0 -> "Tap a piece, then touch your yard to drop it  ·  $left left"
+                else -> "Fort done! Tap Ready when you like it"
+            }
             Ui.text(batch, a.small, msg, uiW / 2f, uiH - 22f - 118f - 46f, Palette.WHITE)
         }
 
         val side = match.turn
-        if (match.phase == Phase.AIM && isHuman(side) && !aiming && hintTime <= 0f) {
-            val msg = if (!game.settings.aimTipSeen) "Drag back anywhere and let go to throw" else selectedItem[side.ordinal].hint
-            Ui.text(batch, a.small, msg, uiW / 2f, 24f + 124f + 46f, Palette.WHITE, maxWidth = 740f)
+        val tip = tip()
+        if (match.phase != Phase.BUILD && tip != null) {
+            Ui.text(batch, a.small, tip, uiW / 2f, TIP_Y, Palette.WHITE, if (hintTime > 0f) min(1f, hintTime * 3f) else 1f, 770f)
         }
         if (match.phase == Phase.FLIGHT && isHuman(side) && match.activeHairball != null) {
-            Ui.text(batch, a.h2, "Tap to split!", uiW / 2f, uiH * 0.36f, Palette.WHITE)
+            Ui.text(batch, a.label, "Tap to split!", uiW / 2f, uiH * 0.5f, Palette.WHITE)
         }
         if (aiming && match.phase == Phase.AIM && aimPower >= 0.02f) {
-            val p = worldToUi(Arena.launchPoint(side).x, Arena.launchPoint(side).y + 1.6f, tmp)
-            Ui.text(batch, a.h2, "${aimAngle.roundToInt()}°  ${(aimPower * 100).roundToInt()}%", p.x, p.y, Palette.WHITE)
+            val launch = Arena.launchPoint(side, tmp2)
+            val p = worldToUi(launch.x, launch.y + 1.9f, tmp)
+            Ui.text(batch, a.label, "${aimAngle.roundToInt()}°  ${(aimPower * 100).roundToInt()}%", p.x, p.y, Palette.WHITE)
         }
-        if (hintTime > 0f) Ui.text(batch, a.body, hintText, uiW / 2f, uiH * 0.36f, Palette.WHITE, min(1f, hintTime * 3f), 860f)
 
         for (p in popups) {
             val pos = worldToUi(p.x, p.y, tmp)
             val alpha = min(1f, p.life * 2.5f)
-            Ui.text(batch, if (p.big) a.h1 else a.h2, p.text, pos.x, pos.y, p.color, alpha)
+            Ui.text(batch, if (p.big) a.h1 else a.label, p.text, pos.x, pos.y, p.color, alpha)
         }
         if (bannerTime > 0f && match.phase != Phase.OVER) {
             val alpha = min(1f, bannerTime * 2.5f) * min(1f, (1.7f - bannerTime) * 6f)

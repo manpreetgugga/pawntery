@@ -63,6 +63,9 @@ enum class PieceType(
 object Arena {
     const val WIDTH = 32f
     const val HEIGHT = 18f
+    /** The camera shows from this height up, so the grass strip has room for the item tray. */
+    const val VIEW_BOTTOM = -1.6f
+    const val VIEW_HEIGHT = HEIGHT - VIEW_BOTTOM
     const val GROUND_Y = 2f
     const val FENCE_X = 16f
     const val FENCE_HALF_W = 0.3f
@@ -78,8 +81,10 @@ object Arena {
     const val MAX_BUILD_HEIGHT = 12f
     const val STEP = 1f / 60f
     const val GRAVITY = -9.8f
-    const val PET_W = 1.1f
-    const val PET_H = 1.2f
+    const val PET_W = 1.35f
+    const val PET_H = 1.45f
+    /** Pet art is drawn for a 1.1 x 1.2 m body; this scales it to the real body. */
+    const val PET_ART_SCALE = 1.2f
 
     fun petX(side: Side) = if (side == Side.LEFT) 6f else WIDTH - 6f
 

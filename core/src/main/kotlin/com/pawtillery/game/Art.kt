@@ -12,7 +12,7 @@ object Palette {
     val SKY_BOTTOM = c("CDEFFC")
     val SUN = c("FFE27A")
     val SUN_HALO = c("FFF1B340")
-    val CLOUD = c("FFFFFFE8")
+    val CLOUD = c("F7FCFF")
     val HILL_FAR = c("A9DC93")
     val HILL_NEAR = c("8DCB74")
     val TREE = c("5DA94A")
@@ -88,7 +88,7 @@ object Art {
     // ---- Scenery ----
 
     fun background(s: ShapeRenderer, left: Float, right: Float, top: Float, time: Float, wind: Float) {
-        s.rect(left, 0f, right - left, top, Palette.SKY_BOTTOM, Palette.SKY_BOTTOM, Palette.SKY_TOP, Palette.SKY_TOP)
+        s.rect(left, Arena.GROUND_Y, right - left, top - Arena.GROUND_Y, Palette.SKY_BOTTOM, Palette.SKY_BOTTOM, Palette.SKY_TOP, Palette.SKY_TOP)
         val sunX = left + 4f
         val sunY = top - 3.2f
         s.color = Palette.SUN_HALO
@@ -147,7 +147,7 @@ object Art {
 
     fun ground(s: ShapeRenderer, left: Float, right: Float) {
         s.color = Palette.GRASS_DARK
-        s.rect(left, -2f, right - left, Arena.GROUND_Y + 2f)
+        s.rect(left, Arena.VIEW_BOTTOM - 2f, right - left, Arena.GROUND_Y - Arena.VIEW_BOTTOM + 2f)
         s.color = Palette.GRASS
         s.rect(left, Arena.GROUND_Y - 0.4f, right - left, 0.4f)
         s.color = Palette.GRASS_TUFT
@@ -225,9 +225,9 @@ object Art {
         s.rotate(0f, 0f, 1f, b.angle * MathUtils.radiansToDegrees)
         val facing = pet.side.dir
         val blink = ((time + pet.side.ordinal * 1.7f) % 3.6f) < 0.12f
-        s.scale(facing, 1f, 1f)
+        s.scale(facing * Arena.PET_ART_SCALE, Arena.PET_ART_SCALE, 1f)
         petShape(s, pet.kind, time + pet.side.ordinal * 0.9f, pet.hitTimer > 0f, blink, pet.mess)
-        s.scale(facing, 1f, 1f)
+        s.scale(facing / Arena.PET_ART_SCALE, 1f / Arena.PET_ART_SCALE, 1f)
         for (d in pet.decals) splat(s, d)
         s.identity()
         stink(s, b.position.x, b.position.y + Arena.PET_H / 2f, pet.mess, time)
