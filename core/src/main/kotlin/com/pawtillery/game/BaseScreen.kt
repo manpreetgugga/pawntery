@@ -24,6 +24,7 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     protected var buttons: List<Button> = emptyList()
     protected var pressedId: String? = null
     private val touchUi = Vector2()
+    private var fadeIn = FADE_TIME
     private val touchWorld = Vector2()
 
     protected val uiW: Float get() = uiView.worldWidth
@@ -40,6 +41,7 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
             val hit = buttons.firstOrNull { it.enabled && it.contains(ui.x, ui.y) }
             if (hit != null) {
                 pressedId = hit.id
+                onButtonDown(hit.id)
                 return true
             }
             onPress(ui, worldView.unproject(touchWorld.set(screenX.toFloat(), screenY.toFloat())))
@@ -117,6 +119,16 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
         batch.begin()
     }
 
+    /** Fades the screen in from dark when it first appears; call last in render(). */
+    protected fun drawFade(delta: Float) {
+        if (fadeIn <= 0f) return
+        fadeIn -= delta
+        beginUiShapes()
+        shapes.setColor(Palette.INK.r, Palette.INK.g, Palette.INK.b, (fadeIn / FADE_TIME).coerceIn(0f, 1f))
+        shapes.rect(0f, 0f, uiW, uiH)
+        shapes.end()
+    }
+
     /** Maps a point in the backyard to UI coordinates (both views always cover the whole screen). */
     protected fun worldToUi(x: Float, y: Float, out: Vector2): Vector2 {
         val ux = (x - viewLeft) / worldView.worldWidth * uiW
@@ -160,5 +172,12 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
 
     open fun onButton(id: String) = Unit
 
+    /** Called as a button is pressed (before [onButton] on release), for buttons that act while held. */
+    open fun onButtonDown(id: String) = Unit
+
     open fun onKey(keycode: Int): Boolean = false
+
+    private companion object {
+        const val FADE_TIME = 0.3f
+    }
 }

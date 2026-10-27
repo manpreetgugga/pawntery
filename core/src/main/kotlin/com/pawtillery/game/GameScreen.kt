@@ -2,6 +2,7 @@ package com.pawtillery.game
 
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.math.Vector2
@@ -20,7 +21,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private class Popup(val text: String, var x: Float, var y: Float, val color: Color, var life: Float, val big: Boolean)
 
     private var match = newMatch()
-    private var computer = ComputerPlayer(Random(System.nanoTime()), game.settings.easyMode)
+    private var computer = newComputer()
     private val events = ArrayList<MatchEvent>()
     private val particles = ArrayList<Particle>()
     private val popups = ArrayList<Popup>()
@@ -33,15 +34,20 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private var buildTimer = 0f
     private var computerBuilding = false
 
-    // Aiming (shared by the player's drag and the computer's animated aim)
+    // Aiming. Each player's aim is kept between turns, so a throw can be repeated or adjusted one
+    // degree or one percent at a time; dragging back sets it directly.
     private val selectedItem = arrayOf(ItemType.MUD, ItemType.MUD)
-    private var aiming = false
-    private val aimStart = Vector2()
-    private val aimVel = Vector2()
-    private var aimPower = 0f
-    private var aimAngle = 0f
+    private val aimAngle = floatArrayOf(45f, 45f)
+    private val aimPower = floatArrayOf(0.6f, 0.6f)
+    private var dragging = false
+    private var dragMoved = false
+    private val dragStart = Vector2()
+    private val computerAim = Vector2()
+    private var computerAiming = false
     private var computerTimer = 0f
     private var computerPlan: ShotPlan? = null
+    private var holdTime = 0f
+    private var repeatTimer = 0f
 
     private var paused = false
     private var bannerTitle = ""
@@ -50,20 +56,25 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private var hintText = ""
     private var hintTime = 0f
     private var shake = 0f
+    private var slowMotion = 0f
+    private val hop = FloatArray(2)
     private var overTime = 0f
-    private var directHits = 0
     private var treatsEarned = 0
     private var unlockable: PetKind? = null
     private val humans = Side.entries.filter { it !in setup.computer }
 
     private val obstacles = ArrayList<Rectangle>()
+    private val bounds = Rectangle()
     private val tmp = Vector2()
     private val tmp2 = Vector2()
+    private val vel = Vector2()
     private val tmpColor = Color()
 
     private fun newMatch() = Match(
         MatchConfig(easyMode = game.settings.easyMode, leftKind = setup.left, rightKind = setup.right, throwsPerPlayer = setup.throwsPerPlayer),
     )
+
+    private fun newComputer() = ComputerPlayer(Random(System.nanoTime()), setup.level)
 
     private fun isHuman(side: Side) = side !in setup.computer
 
@@ -72,10 +83,12 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private fun playerLabel(side: Side) = when {
         humans.size == 2 -> "Player ${side.ordinal + 1}"
         isHuman(side) -> "You"
-        else -> "Computer"
+        else -> setup.level.displayName
     }
 
     private val overlayUp: Boolean get() = paused || (match.phase == Phase.OVER && overTime > 0.9f)
+
+    private val humanAiming: Boolean get() = match.phase == Phase.AIM && isHuman(match.turn) && !overlayUp
 
     // ---- Loop ----
 
@@ -83,19 +96,25 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         val dt = min(delta, 1f / 20f)
         if (!paused) update(dt)
         draw()
+        drawFade(delta)
     }
 
-    private fun update(dt: Float) {
+    private fun update(realDt: Float) {
+        // The hit that decides the match plays in slow motion.
+        val dt = if (slowMotion > 0f) realDt * 0.3f else realDt
+        slowMotion -= realDt
         match.update(dt)
         match.drainEvents(events)
         for (e in events) onEvent(e)
         events.clear()
         updateComputer(dt)
         updateEffects(dt)
-        bannerTime -= dt
-        hintTime -= dt
-        shake = max(0f, shake - dt * 2.5f)
-        if (match.phase == Phase.OVER) overTime += dt
+        updateHeldButton(realDt)
+        for (i in hop.indices) if (hop[i] > 0f) hop[i] -= dt
+        bannerTime -= realDt
+        hintTime -= realDt
+        shake = max(0f, shake - realDt * 2.5f)
+        if (match.phase == Phase.OVER) overTime += realDt
     }
 
     private fun updateComputer(dt: Float) {
@@ -135,10 +154,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 val plan = computerPlan ?: return
                 val k = ((computerTimer - 0.55f) / 0.9f).coerceIn(0f, 1f)
                 val ease = k * k * (3f - 2f * k)
-                setAim(plan.vx * ease, plan.vy * ease)
-                aiming = true
+                computerAim.set(plan.vx * ease, plan.vy * ease)
+                computerAiming = true
                 if (computerTimer > 1.75f) {
-                    aiming = false
+                    computerAiming = false
                     match.throwItem(plan.item, plan.vx, plan.vy)
                 }
             }
@@ -150,10 +169,12 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         }
     }
 
-    private fun setAim(vx: Float, vy: Float) {
-        aimVel.set(vx, vy)
-        aimPower = aimVel.len() / Arena.MAX_SPEED
-        aimAngle = atan2(vy, abs(vx)) * MathUtils.radiansToDegrees
+    /** The current aim of [side] as a launch velocity. */
+    private fun aimVelocity(side: Side, out: Vector2): Vector2 {
+        if (!isHuman(side)) return out.set(computerAim)
+        val speed = aimPower[side.ordinal] * Arena.MAX_SPEED
+        val a = aimAngle[side.ordinal]
+        return out.set(side.dir * MathUtils.cosDeg(a) * speed, MathUtils.sinDeg(a) * speed)
     }
 
     private fun onEvent(e: MatchEvent) {
@@ -173,7 +194,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             is MatchEvent.TurnStarted -> {
                 computerTimer = 0f
                 computerPlan = null
-                aiming = false
+                computerAiming = false
+                dragging = false
                 if (match.count(e.side, selectedItem[e.side.ordinal]) == 0) selectedItem[e.side.ordinal] = ItemType.MUD
                 val who = when {
                     humans.size == 2 -> playerLabel(e.side)
@@ -183,7 +205,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 banner("${petName(e.side)}'s turn", who)
             }
             is MatchEvent.Thrown -> {
-                game.sfx("throw", 0.9f, 0.85f + aimPower * 0.3f)
+                game.sfx("throw", 0.9f, 0.85f + aimVelocity(e.side, vel).len() / Arena.MAX_SPEED * 0.3f)
+                hop[e.side.ordinal] = HOP_TIME
                 if (isHuman(e.side)) game.settings.aimTipSeen = true
             }
             is MatchEvent.Split -> {
@@ -201,13 +224,16 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             }
             is MatchEvent.PetHit -> {
                 val amount = e.amount.roundToInt()
-                if (e.item != null && amount >= 5 && !isHuman(e.side)) directHits++
                 game.sfx("bonk", 0.9f, 0.9f + MathUtils.random(0.25f))
                 game.buzz(if (amount >= 12) 60 else 25)
                 if (amount >= 2) popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
-                if (amount >= 14) popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true))
-                if (e.item == null && amount >= 3) popups.add(Popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true))
+                when {
+                    e.trick != null -> popups.add(Popup(e.trick, e.x, e.y + 2.1f, Palette.GOLD, 1.6f, true))
+                    e.item == null && amount >= 3 -> popups.add(Popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true))
+                    amount >= 14 -> popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true))
+                }
                 shake = max(shake, 0.25f)
+                if (match.pet(e.side).mess >= Arena.MESS_TO_LOSE && slowMotion <= 0f) slowMotion = 1.3f
             }
             is MatchEvent.Thud -> {
                 val v = (e.strength / 15f).coerceIn(0.15f, 1f)
@@ -229,7 +255,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             winner in humans -> GameResult.WIN
             else -> GameResult.LOSS
         }
-        treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, directHits)
+        val hits = humans.sumOf { match.stats(it).hits }
+        val tricks = humans.sumOf { match.stats(it).tricks }
+        val factor = if (humans.size == 1) setup.level.treatFactor else 1f
+        treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, hits, tricks, factor)
         unlockable = PetKind.entries.firstOrNull { !game.settings.isUnlocked(it) && game.settings.treats >= it.price }
     }
 
@@ -280,9 +309,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         when (match.phase) {
             Phase.BUILD -> if (isHuman(side) && buildQueue.isEmpty() && match.piecesLeft(side) > 0) ghostX = world.x
             Phase.AIM -> if (isHuman(side)) {
-                aiming = true
-                aimStart.set(ui)
-                setAim(0f, 0f)
+                dragging = true
+                dragMoved = false
+                dragStart.set(ui)
             }
             Phase.FLIGHT -> if (isHuman(side) && match.activeSplitter != null) match.splitActive()
             else -> Unit
@@ -292,7 +321,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     override fun onDrag(ui: Vector2, world: Vector2) {
         if (overlayUp) return
         if (ghostX != null) ghostX = world.x
-        if (aiming && match.phase == Phase.AIM && isHuman(match.turn)) updateAimFromDrag(ui)
+        if (dragging && humanAiming) {
+            if (!dragMoved && dragStart.dst(ui) > DRAG_SLOP) dragMoved = true
+            if (dragMoved) aimFromDrag(ui)
+        }
     }
 
     override fun onRelease(ui: Vector2, world: Vector2) {
@@ -301,30 +333,67 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             ghostX = null
             if (match.phase == Phase.BUILD && !match.placePiece(selectedPiece, rotated, gx)) hint("No room there. Try another spot.")
         }
-        if (aiming && match.phase == Phase.AIM && isHuman(match.turn)) {
-            aiming = false
-            updateAimFromDrag(ui)
-            if (aimPower < MIN_POWER) {
-                hint("Pull back farther, then let go")
-            } else {
-                match.throwItem(selectedItem[match.turn.ordinal], aimVel.x, aimVel.y)
-            }
+        if (dragging && humanAiming) {
+            dragging = false
+            if (!dragMoved) return
+            aimFromDrag(ui)
+            if (aimPower[match.turn.ordinal] < MIN_POWER) hint("Pull back farther, then let go") else throwNow()
         }
+        dragging = false
     }
 
     /** Slingshot aiming: pull away from where you touched, and the throw goes the opposite way. */
-    private fun updateAimFromDrag(ui: Vector2) {
-        val dir = match.turn.dir
-        val dx = aimStart.x - ui.x
-        val dy = aimStart.y - ui.y
-        val power = (Vector2.len(dx, dy) / PULL_FOR_FULL_POWER).coerceAtMost(1f)
-        val angle = (atan2(dy, dx * dir) * MathUtils.radiansToDegrees).coerceIn(0f, 85f)
-        val speed = power * Arena.MAX_SPEED
-        setAim(dir * MathUtils.cosDeg(angle) * speed, MathUtils.sinDeg(angle) * speed)
+    private fun aimFromDrag(ui: Vector2) {
+        val side = match.turn
+        val dx = dragStart.x - ui.x
+        val dy = dragStart.y - ui.y
+        aimPower[side.ordinal] = (Vector2.len(dx, dy) / PULL_FOR_FULL_POWER).coerceAtMost(1f)
+        aimAngle[side.ordinal] = (atan2(dy, dx * side.dir) * MathUtils.radiansToDegrees).coerceIn(0f, 85f).roundToInt().toFloat()
+    }
+
+    private fun throwNow() {
+        val side = match.turn
+        aimPower[side.ordinal] = aimPower[side.ordinal].coerceAtLeast(MIN_POWER)
+        aimVelocity(side, vel)
+        match.throwItem(selectedItem[side.ordinal], vel.x, vel.y)
+    }
+
+    /** One step of fine aiming: a degree of angle or a percent of power. */
+    private fun nudge(id: String) {
+        val i = match.turn.ordinal
+        when (id) {
+            "angle-" -> aimAngle[i] = (aimAngle[i] - 1f).coerceIn(0f, 85f)
+            "angle+" -> aimAngle[i] = (aimAngle[i] + 1f).coerceIn(0f, 85f)
+            "power-" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() - 1).coerceIn(5, 100) / 100f
+            "power+" -> aimPower[i] = ((aimPower[i] * 100f).roundToInt() + 1).coerceIn(5, 100) / 100f
+        }
+    }
+
+    override fun onButtonDown(id: String) {
+        if (id in NUDGE_IDS && humanAiming) {
+            nudge(id)
+            holdTime = 0f
+            repeatTimer = 0f
+        }
+    }
+
+    /** Holding an angle or power button keeps stepping it. */
+    private fun updateHeldButton(dt: Float) {
+        val id = pressedId ?: return
+        if (id !in NUDGE_IDS || !humanAiming) return
+        holdTime += dt
+        if (holdTime < 0.4f) return
+        repeatTimer -= dt
+        if (repeatTimer <= 0f) {
+            nudge(id)
+            repeatTimer = 0.05f
+        }
     }
 
     override fun onButton(id: String) {
         when {
+            id in NUDGE_IDS -> Unit
+            id == "throw" -> if (humanAiming) throwNow()
             id == "pause" -> paused = true
             id == "resume" -> paused = false
             id == "restart" || id == "rematch" -> restart()
@@ -366,21 +435,23 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private fun restart() {
         match.dispose()
         match = newMatch()
-        computer = ComputerPlayer(Random(System.nanoTime()), game.settings.easyMode)
-        directHits = 0
+        computer = newComputer()
         treatsEarned = 0
         unlockable = null
         particles.clear()
         popups.clear()
         buildQueue.clear()
         selectedItem.fill(ItemType.MUD)
-        aiming = false
+        dragging = false
+        computerAiming = false
         ghostX = null
         paused = false
         computerPlan = null
         computerTimer = 0f
         computerBuilding = false
         overTime = 0f
+        slowMotion = 0f
+        hop.fill(0f)
     }
 
     override fun dispose() {
@@ -404,9 +475,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         Art.fence(s)
         Art.ground(s, viewLeft, viewRight)
         Art.groundDecals(s, match.groundDecals)
+        drawShadows()
         if (match.phase == Phase.BUILD && isHuman(match.turn) && buildQueue.isEmpty()) drawBuildZone()
         for (p in match.pieces) Art.piece(s, p)
-        for (p in match.pets.values) Art.pet(s, p, match.time)
+        for (p in match.pets.values) Art.pet(s, p, match.time, hopLift(p.side))
         for (p in match.projectiles) Art.projectile(s, p)
         drawGhost()
         drawAim()
@@ -436,6 +508,27 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             drawOverlayText()
             Ui.buttonLabels(batch, game.assets, buttons, pressedId)
             batch.end()
+        }
+    }
+
+    private fun hopLift(side: Side): Float {
+        val t = hop[side.ordinal]
+        return if (t > 0f) MathUtils.sin((1f - t / HOP_TIME) * MathUtils.PI) * 0.3f else 0f
+    }
+
+    private fun drawShadows() {
+        val s = shapes
+        for (p in match.pieces) {
+            match.bodyBounds(p.body, bounds)
+            Art.shadow(s, bounds.x + bounds.width / 2f, bounds.width / 2f, bounds.y)
+        }
+        for (p in match.pets.values) {
+            match.bodyBounds(p.body, bounds)
+            Art.shadow(s, bounds.x + bounds.width / 2f, bounds.width / 2f, bounds.y + hopLift(p.side))
+        }
+        for (p in match.projectiles) {
+            val pos = p.body.position
+            Art.shadow(s, pos.x, p.radius, pos.y - p.radius)
         }
     }
 
@@ -480,66 +573,60 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private fun drawAim() {
         if (match.phase != Phase.AIM) return
         val side = match.turn
+        if (!isHuman(side) && !computerAiming) return
         val origin = Arena.launchPoint(side, tmp2)
         val s = shapes
         val item = selectedItem[side.ordinal]
+        val v = aimVelocity(side, vel)
+        val power = v.len() / Arena.MAX_SPEED
 
-        // Previous throw, so players can adjust from it.
+        // The previous throw, faintly, so players can adjust from it.
         val last = match.lastVelocity(side)
         if (last != null && isHuman(side)) {
             val len = 0.8f + 2.2f * last.len() / Arena.MAX_SPEED
-            val nx = last.x / last.len()
-            val ny = last.y / last.len()
             s.color = tmpColor.set(Palette.INK).also { it.a = 0.3f }
-            s.rectLine(origin.x, origin.y, origin.x + nx * len, origin.y + ny * len, 0.07f)
+            s.rectLine(origin.x, origin.y, origin.x + last.x / last.len() * len, origin.y + last.y / last.len() * len, 0.07f)
         }
 
-        if (!aiming || aimPower < 0.02f) {
-            s.identity()
-            s.translate(origin.x, origin.y, 0f)
-            Art.itemShape(s, item, item.radius)
-            s.identity()
-            if (isHuman(side) && !game.settings.aimTipSeen) drawAimTip(origin)
-            return
-        }
-
-        obstacles.clear()
-        for (p in match.pieces) if (p.side == side.other) obstacles.add(match.bodyBounds(p.body, Rectangle()))
-        val steps = if (match.config.easyMode) 420 else 26
-        Trajectory.simulate(origin.x, origin.y, aimVel.x, aimVel.y, item, side, match.wind, steps) { step, x, y, _, _ ->
-            val blocked = y < Arena.GROUND_Y ||
-                (abs(x - Arena.FENCE_X) < Arena.FENCE_HALF_W && y < Arena.FENCE_PEAK) ||
-                x < 0f || x > Arena.WIDTH ||
-                obstacles.any { it.contains(x, y) }
-            if (!blocked && step % 4 == 0) {
-                val fade = if (match.config.easyMode) 1f else 1f - step / steps.toFloat()
-                s.color = tmpColor.set(Palette.INK).also { it.a = 0.45f * fade }
-                s.circle(x, y, 0.12f, 10)
-                s.color = tmpColor.set(1f, 1f, 1f, 0.95f * fade)
-                s.circle(x, y, 0.085f, 10)
+        if (power > 0.02f) {
+            obstacles.clear()
+            for (p in match.pieces) if (p.side == side.other) obstacles.add(match.bodyBounds(p.body, Rectangle()))
+            val steps = if (match.config.easyMode) 420 else 26
+            Trajectory.simulate(origin.x, origin.y, v.x, v.y, item, side, match.wind, steps) { step, x, y, _, _ ->
+                val blocked = y < Arena.GROUND_Y ||
+                    (abs(x - Arena.FENCE_X) < Arena.FENCE_HALF_W && y < Arena.FENCE_PEAK) ||
+                    x < 0f || x > Arena.WIDTH ||
+                    obstacles.any { it.contains(x, y) }
+                if (!blocked && step % 4 == 0) {
+                    val fade = if (match.config.easyMode) 1f else 1f - step / steps.toFloat()
+                    s.color = tmpColor.set(Palette.INK).also { it.a = 0.45f * fade }
+                    s.circle(x, y, 0.12f, 10)
+                    s.color = tmpColor.set(1f, 1f, 1f, 0.95f * fade)
+                    s.circle(x, y, 0.085f, 10)
+                }
+                !blocked
             }
-            !blocked
+            val len = 0.8f + 2.2f * power
+            val nx = v.x / v.len()
+            val ny = v.y / v.len()
+            val c = when {
+                power < 0.5f -> tmpColor.set(Palette.GOOD).lerp(Palette.GOLD, power * 2f)
+                else -> tmpColor.set(Palette.GOLD).lerp(Palette.BAD, (power - 0.5f) * 2f)
+            }
+            val tipX = origin.x + nx * len
+            val tipY = origin.y + ny * len
+            s.color = Palette.INK
+            s.rectLine(origin.x, origin.y, tipX, tipY, 0.2f)
+            s.triangle(tipX + nx * 0.42f, tipY + ny * 0.42f, tipX - ny * 0.3f, tipY + nx * 0.3f, tipX + ny * 0.3f, tipY - nx * 0.3f)
+            s.color = c
+            s.rectLine(origin.x, origin.y, tipX, tipY, 0.12f)
+            s.triangle(tipX + nx * 0.32f, tipY + ny * 0.32f, tipX - ny * 0.22f, tipY + nx * 0.22f, tipX + ny * 0.22f, tipY - nx * 0.22f)
         }
-
-        val len = 0.8f + 2.2f * aimPower
-        val nx = aimVel.x / aimVel.len()
-        val ny = aimVel.y / aimVel.len()
-        val c = when {
-            aimPower < 0.5f -> tmpColor.set(Palette.GOOD).lerp(Palette.GOLD, aimPower * 2f)
-            else -> tmpColor.set(Palette.GOLD).lerp(Palette.BAD, (aimPower - 0.5f) * 2f)
-        }
-        val tipX = origin.x + nx * len
-        val tipY = origin.y + ny * len
-        s.color = Palette.INK
-        s.rectLine(origin.x, origin.y, tipX, tipY, 0.2f)
-        s.triangle(tipX + nx * 0.42f, tipY + ny * 0.42f, tipX - ny * 0.3f, tipY + nx * 0.3f, tipX + ny * 0.3f, tipY - nx * 0.3f)
-        s.color = c
-        s.rectLine(origin.x, origin.y, tipX, tipY, 0.12f)
-        s.triangle(tipX + nx * 0.32f, tipY + ny * 0.32f, tipX - ny * 0.22f, tipY + nx * 0.22f, tipX + ny * 0.22f, tipY - nx * 0.22f)
         s.identity()
         s.translate(origin.x, origin.y, 0f)
         Art.itemShape(s, item, item.radius)
         s.identity()
+        if (isHuman(side) && !dragging && !game.settings.aimTipSeen) drawAimTip(origin)
     }
 
     /** A ghost finger pulling back, shown until the player's first throw. */
@@ -577,6 +664,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     // ---- HUD ----
 
+    private val aimPanelX: Float get() = uiW - 20f - AIM_PANEL_W
+
     private fun layoutButtons(): List<Button> {
         val list = ArrayList<Button>()
         if (paused) {
@@ -589,9 +678,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         if (match.phase == Phase.OVER) {
             if (overTime > 0.9f) {
                 val cx = uiW / 2f
-                list += Button("rematch", cx - 390f, uiH / 2f - 270f, 290f, 100f, "Rematch", ButtonStyle.PRIMARY)
-                list += Button("pets", cx - 80f, uiH / 2f - 270f, 230f, 100f, "Pets", ButtonStyle.TEAL)
-                list += Button("menu", cx + 170f, uiH / 2f - 270f, 220f, 100f, "Menu")
+                list += Button("rematch", cx - 390f, uiH / 2f - 290f, 290f, 100f, "Rematch", ButtonStyle.PRIMARY)
+                list += Button("pets", cx - 80f, uiH / 2f - 290f, 230f, 100f, "Pets", ButtonStyle.TEAL)
+                list += Button("menu", cx + 170f, uiH / 2f - 290f, 220f, 100f, "Menu")
             }
             return list
         }
@@ -602,7 +691,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         })
         val side = match.turn
         if (match.phase == Phase.BUILD && isHuman(side) && buildQueue.isEmpty()) addBuildTray(list, side)
-        if ((match.phase == Phase.AIM) && isHuman(side)) addItemTray(list, side)
+        if (match.phase == Phase.AIM && isHuman(side)) {
+            addItemTray(list, side)
+            addAimControls(list)
+        }
         return list
     }
 
@@ -644,7 +736,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         list += Button("ready", x, y, controls[3], bh, "Ready!", ButtonStyle.PRIMARY)
     }
 
-    private fun star(s: com.badlogic.gdx.graphics.glutils.ShapeRenderer, cx: Float, cy: Float, r: Float) {
+    private fun star(s: ShapeRenderer, cx: Float, cy: Float, r: Float) {
         for (i in 0 until 5) {
             val a = 90f + i * 72f
             s.triangle(
@@ -662,10 +754,10 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     private fun addItemTray(list: MutableList<Button>, side: Side) {
         val items = match.items(side)
-        val bw = 184f
+        val bw = 170f
         val bh = 124f
-        val gap = 14f
-        var x = (uiW - (items.size * bw + (items.size - 1) * gap)) / 2f
+        val gap = 12f
+        var x = 130f
         for (item in items) {
             val n = match.count(side, item)
             list += Button("item:${item.name}", x, 24f, bw, bh, item.displayName,
@@ -674,6 +766,18 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 icon = { s, cx, cy, size -> icon(cx, cy - 2f, size * 0.42f / item.radius) { Art.itemShape(s, item, item.radius) } })
             x += bw + gap
         }
+    }
+
+    /** Angle and power steppers plus a Throw button, for precise, repeatable throws. */
+    private fun addAimControls(list: MutableList<Button>) {
+        val x = aimPanelX
+        val row1 = AIM_PANEL_Y + 82f
+        val row2 = AIM_PANEL_Y + 14f
+        for ((row, name) in listOf(row1 to "angle", row2 to "power")) {
+            list += Button("$name-", x + 12f, row, 62f, 56f, "-")
+            list += Button("$name+", x + 210f, row, 62f, 56f, "+")
+        }
+        list += Button("throw", x + 288f, AIM_PANEL_Y + 14f, AIM_PANEL_W - 300f, 124f, "Throw!", ButtonStyle.PRIMARY)
     }
 
     private fun drawHudShapes() {
@@ -690,14 +794,14 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             s.color = Palette.SHADE
             Ui.roundRect(s, uiW / 2f - 400f, TIP_Y - 25f, 800f, 50f, 25f)
         }
+        if (humanAiming) Ui.panel(s, aimPanelX, AIM_PANEL_Y, AIM_PANEL_W, AIM_PANEL_H)
     }
 
     /** The one-line tip under the wind panel: a fresh hint, the first-throw tip, or what the item does. */
     private fun tip(): String? {
         if (hintTime > 0f) return hintText
-        val side = match.turn
-        if (match.phase != Phase.AIM || !isHuman(side) || aiming) return null
-        return if (!game.settings.aimTipSeen) "Drag back anywhere and let go to throw" else selectedItem[side.ordinal].hint
+        if (!humanAiming || dragging) return null
+        return if (!game.settings.aimTipSeen) "Drag back anywhere and let go, or set angle and power and tap Throw" else selectedItem[match.turn.ordinal].hint
     }
 
     private val TIP_Y: Float get() = uiH - 20f - 90f - 64f
@@ -720,7 +824,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         s.circle(iconX, y + h / 2f, 44f, 30)
         icon(iconX - side.dir * 4f, y + h / 2f - 26f, 72f) {
             s.scale(side.dir, 1f, 1f)
-            Art.petShape(s, pet.kind, match.time, pet.hitTimer > 0f, false, pet.mess)
+            Art.petOutlined(s, pet.kind, match.time, pet.hitTimer > 0f, false, pet.mess)
         }
         // Mess bar
         val barX = if (side == Side.LEFT) x + 124f else x + 22f
@@ -788,13 +892,22 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         if (match.phase != Phase.BUILD && tip != null) {
             Ui.text(batch, a.small, tip, uiW / 2f, TIP_Y, Palette.WHITE, if (hintTime > 0f) min(1f, hintTime * 3f) else 1f, 770f)
         }
+        if (humanAiming) {
+            val x = aimPanelX + 142f
+            Ui.text(batch, a.small, "ANGLE", x, AIM_PANEL_Y + 128f, Palette.INK, 0.6f)
+            Ui.text(batch, a.h2, "${aimAngle[side.ordinal].roundToInt()}°", x, AIM_PANEL_Y + 102f, Palette.INK)
+            Ui.text(batch, a.small, "POWER", x, AIM_PANEL_Y + 60f, Palette.INK, 0.6f)
+            Ui.text(batch, a.h2, "${(aimPower[side.ordinal] * 100).roundToInt()}%", x, AIM_PANEL_Y + 34f, Palette.INK)
+        }
         if (match.phase == Phase.FLIGHT && isHuman(side) && match.activeSplitter != null) {
             Ui.text(batch, a.label, "Tap to split!", uiW / 2f, uiH * 0.5f, Palette.WHITE)
         }
-        if (aiming && match.phase == Phase.AIM && aimPower >= 0.02f) {
+        if (match.phase == Phase.AIM && ((dragging && dragMoved) || computerAiming)) {
             val launch = Arena.launchPoint(side, tmp2)
             val p = worldToUi(launch.x, launch.y + 1.9f, tmp)
-            Ui.text(batch, a.label, "${aimAngle.roundToInt()}°  ${(aimPower * 100).roundToInt()}%", p.x, p.y, Palette.WHITE)
+            val v = aimVelocity(side, vel)
+            val angle = (atan2(v.y, abs(v.x)) * MathUtils.radiansToDegrees).roundToInt()
+            Ui.text(batch, a.label, "$angle°  ${(v.len() / Arena.MAX_SPEED * 100).roundToInt()}%", p.x, p.y, Palette.WHITE)
         }
 
         for (p in popups) {
@@ -822,13 +935,13 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             Ui.panel(s, uiW / 2f - 260f, uiH / 2f - 270f, 520f, 520f)
             return
         }
-        Ui.panel(s, uiW / 2f - 420f, uiH / 2f - 290f, 840f, 600f)
+        Ui.panel(s, uiW / 2f - 430f, uiH / 2f - 310f, 860f, 640f)
         val winner = match.winner ?: return
         val pet = match.pet(winner)
         val bounce = abs(MathUtils.sin(overTime * 4f)) * 14f
-        icon(uiW / 2f, uiH / 2f + 70f + bounce, 120f) {
+        icon(uiW / 2f, uiH / 2f + 90f + bounce, 110f) {
             s.scale(winner.dir, 1f, 1f)
-            Art.petShape(s, pet.kind, overTime, false, false, 0f)
+            Art.petOutlined(s, pet.kind, overTime, false, false, 0f)
         }
     }
 
@@ -836,7 +949,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         val a = game.assets
         val cx = uiW / 2f
         if (paused) {
-            Ui.text(batch, a.h1, "Paused", cx, uiH / 2f + 180f, Palette.INK)
+            Ui.text(batch, a.h1, "Paused", cx, uiH / 2f + 180f, Palette.WHITE)
             return
         }
         val winner = match.winner
@@ -844,29 +957,47 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             winner == null -> "It's a draw!"
             humans.size != 1 -> "${petName(winner)} wins!"
             isHuman(winner) -> "You win!"
-            else -> "Computer wins!"
+            else -> "${setup.level.displayName} wins!"
         }
-        Ui.text(batch, a.title, title, cx, uiH / 2f + 230f, Palette.WHITE)
+        Ui.text(batch, a.title, title, cx, uiH / 2f + 250f, Palette.WHITE)
         val loser = winner?.other
         val why = when {
             loser != null && match.pet(loser).mess >= Arena.MESS_TO_LOSE -> "${petName(loser)} is 100% messy!"
             winner == null -> "Exactly as messy as each other"
             else -> "Least messy after ${match.config.throwsPerPlayer} throws each"
         }
-        Ui.text(batch, a.h2, why, cx, uiH / 2f - 40f, Palette.INK)
+        Ui.text(batch, a.h2, why, cx, uiH / 2f - 20f, Palette.INK)
         val l = match.pet(Side.LEFT)
         val r = match.pet(Side.RIGHT)
-        Ui.text(batch, a.body, "${l.kind.displayName} mess ${l.mess.roundToInt()}%     ${r.kind.displayName} mess ${r.mess.roundToInt()}%", cx, uiH / 2f - 86f, Palette.INK, 0.8f)
+        Ui.text(batch, a.body, "${l.kind.displayName} mess ${l.mess.roundToInt()}%     ${r.kind.displayName} mess ${r.mess.roundToInt()}%", cx, uiH / 2f - 64f, Palette.INK, 0.8f)
+        var y = uiH / 2f - 104f
+        for (side in humans) {
+            val st = match.stats(side)
+            val who = if (humans.size == 2) "${playerLabel(side)}:" else "You:"
+            val trickText = when (st.tricks) {
+                0 -> ""
+                1 -> "  ·  1 trick shot"
+                else -> "  ·  ${st.tricks} trick shots"
+            }
+            Ui.text(batch, a.body, "$who ${st.hits} of ${st.throws} throws hit$trickText", cx, y, Palette.INK, 0.8f)
+            y -= 38f
+        }
         if (treatsEarned > 0) {
             val next = unlockable
             val line = if (next != null) "+$treatsEarned treats! You can unlock ${next.displayName} now" else "+$treatsEarned treats"
-            Ui.text(batch, a.h2, line, cx, uiH / 2f - 140f, Palette.ACCENT_DARK, maxWidth = 780f)
+            Ui.text(batch, a.h2, line, cx, uiH / 2f - 176f, Palette.ACCENT_DARK, maxWidth = 780f)
         }
     }
 
     private companion object {
         const val PULL_FOR_FULL_POWER = 330f
         const val MIN_POWER = 0.12f
+        const val DRAG_SLOP = 14f
+        const val HOP_TIME = 0.35f
+        const val AIM_PANEL_W = 430f
+        const val AIM_PANEL_H = 150f
+        const val AIM_PANEL_Y = 18f
+        val NUDGE_IDS = setOf("angle-", "angle+", "power-", "power+")
         val HIT_WORDS = listOf("Splat!", "Gotcha!", "Bullseye!", "Yuck!", "Messy!")
     }
 }

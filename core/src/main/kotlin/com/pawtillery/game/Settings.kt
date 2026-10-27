@@ -26,6 +26,10 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         get() = prefs.getBoolean("aimTipSeen", false)
         set(value) = save { prefs.putBoolean("aimTipSeen", value) }
 
+    var computerLevel: ComputerLevel
+        get() = ComputerLevel.entries.firstOrNull { it.name == prefs.getString("computerLevel") } ?: ComputerLevel.NORMAL
+        set(value) = save { prefs.putString("computerLevel", value.name) }
+
     /** The pet chosen last time, so the pet picker starts there. */
     var lastPet: PetKind
         get() = PetKind.entries.firstOrNull { it.name == prefs.getString("lastPet") } ?: PetKind.DOG
@@ -55,14 +59,17 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         return true
     }
 
-    /** Records a finished game and returns the treats it earned. */
-    fun recordGame(result: GameResult, throwsPerPlayer: Int, directHits: Int): Int {
+    /**
+     * Records a finished game and returns the treats it earned: a base for the result (scaled by
+     * match length and by [levelFactor] for the computer's level), 2 per hit and 5 per trick shot.
+     */
+    fun recordGame(result: GameResult, throwsPerPlayer: Int, hits: Int, tricks: Int, levelFactor: Float = 1f): Int {
         val base = when (result) {
             GameResult.WIN -> 30
             GameResult.DRAW -> 18
             GameResult.LOSS -> 12
         }
-        val earned = base * throwsPerPlayer / MatchConfig.FULL_MATCH + directHits * 2
+        val earned = (base * throwsPerPlayer / MatchConfig.FULL_MATCH * levelFactor).toInt() + hits * 2 + tricks * 5
         prefs.putInteger("treats", treats + earned)
         prefs.putInteger("gamesPlayed", gamesPlayed + 1)
         if (result == GameResult.WIN) prefs.putInteger("wins", wins + 1)

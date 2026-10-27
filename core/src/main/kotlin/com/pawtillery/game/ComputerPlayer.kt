@@ -10,13 +10,20 @@ import kotlin.random.Random
 
 class Placement(val type: PieceType, val rotated: Boolean, val x: Float)
 
+/** How well the computer aims (aiming error in degrees and m/s), and whether it eases off when far ahead. */
+enum class ComputerLevel(val displayName: String, val angleError: Float, val speedError: Float, val easesOff: Boolean, val treatFactor: Float) {
+    ROOKIE("Rookie", 3.2f, 0.55f, true, 0.75f),
+    NORMAL("Normal", 1.5f, 0.27f, true, 1f),
+    CHAMPION("Champion", 0.55f, 0.1f, false, 1.5f),
+}
+
 class ShotPlan(val item: ItemType, val vx: Float, val vy: Float, val splitAtApex: Boolean)
 
 /**
  * The computer opponent. It searches throws with [Trajectory] (so it plays by the same physics as
- * the player), then adds aiming error: more in Easy mode, and more when it is far ahead, so games stay close.
+ * the player), then adds aiming error for its [level]; below Champion it also eases off when far ahead.
  */
-class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
+class ComputerPlayer(private val rng: Random, private val level: ComputerLevel) {
 
     private enum class Stop { PET, PIECE, FENCE, GROUND, OUT }
 
@@ -60,10 +67,10 @@ class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
         val blockers = match.pieces.filter { it.side == side.other }.map { match.bodyBounds(it.body, Rectangle()) }
         val available = match.items(side).filter { match.count(side, it) != 0 }
         val signature = match.pet(side).kind.signature
-        angleError = if (easy) 3f else 1.2f
-        speedError = if (easy) 0.5f else 0.22f
+        angleError = level.angleError
+        speedError = level.speedError
         // Ease off when far ahead so a losing player can catch up.
-        if (match.pet(side).mess + 30f < match.pet(side.other).mess) {
+        if (level.easesOff && match.pet(side).mess + 30f < match.pet(side.other).mess) {
             angleError *= 1.6f
             speedError *= 1.6f
         }

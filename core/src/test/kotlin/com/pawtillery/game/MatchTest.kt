@@ -110,15 +110,13 @@ class MatchTest {
     fun directHitMakesThePetMessy() {
         val m = newMatch()
         m.skipBuild()
-        val plan = ComputerPlayer(Random(3), easy = false).let { ai ->
-            // Ask for a perfect throw by searching, then throw it with no aiming error.
-            findHit(m, Side.LEFT)
-        }
+        val plan = findHit(m, Side.LEFT)
         assertTrue(m.throwItem(ItemType.MUD, plan.first, plan.second))
         m.runUntil { phase == Phase.AIM }
         assertTrue("cat mess was ${m.pet(Side.RIGHT).mess}", m.pet(Side.RIGHT).mess >= 9f)
         assertEquals(0f, m.pet(Side.LEFT).mess, 0.001f)
         assertTrue(m.pet(Side.RIGHT).decals.isNotEmpty())
+        assertEquals(ThrowStats(throws = 1, hits = 1, tricks = 0), m.stats(Side.LEFT))
     }
 
     @Test
@@ -187,7 +185,7 @@ class MatchTest {
         for (seed in 1L..5L) {
             val pets = PetKind.entries
             val m = newMatch(easy = seed % 2 == 0L, seed = seed, left = pets[seed.toInt() % pets.size], right = pets[(seed.toInt() + 2) % pets.size])
-            val ai = ComputerPlayer(Random(seed), easy = m.config.easyMode)
+            val ai = ComputerPlayer(Random(seed), ComputerLevel.entries[seed.toInt() % ComputerLevel.entries.size])
             for (side in Side.entries) {
                 ai.planBuild(side).forEach { assertTrue(m.placePiece(it.type, it.rotated, it.x)) }
                 m.runUntil(2f) { false }

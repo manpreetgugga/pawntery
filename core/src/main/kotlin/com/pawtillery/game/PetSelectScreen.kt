@@ -2,8 +2,14 @@ package com.pawtillery.game
 
 import com.badlogic.gdx.Input
 
-/** Who plays which side, and how long the match is. */
-class MatchSetup(val left: PetKind, val right: PetKind, val computer: Set<Side>, val throwsPerPlayer: Int)
+/** Who plays which side, how long the match is, and how well the computer aims. */
+class MatchSetup(
+    val left: PetKind,
+    val right: PetKind,
+    val computer: Set<Side>,
+    val throwsPerPlayer: Int,
+    val level: ComputerLevel = ComputerLevel.NORMAL,
+)
 
 /**
  * Pick a pet (each player in turn for two players). Locked pets show their price in treats and can
@@ -54,17 +60,20 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
         }
         batch.end()
 
-        val kind = offer ?: return
-        beginUiShapes()
-        s.color = Palette.SHADE
-        s.rect(0f, 0f, uiW, uiH)
-        Ui.panel(s, uiW / 2f - 380f, uiH / 2f - 210f, 760f, 400f)
-        Ui.buttons(s, offerButtons, pressedId)
-        s.end()
-        beginUiText()
-        drawOfferText(kind)
-        Ui.buttonLabels(batch, a, offerButtons, pressedId)
-        batch.end()
+        val kind = offer
+        if (kind != null) {
+            beginUiShapes()
+            s.color = Palette.SHADE
+            s.rect(0f, 0f, uiW, uiH)
+            Ui.panel(s, uiW / 2f - 380f, uiH / 2f - 210f, 760f, 400f)
+            Ui.buttons(s, offerButtons, pressedId)
+            s.end()
+            beginUiText()
+            drawOfferText(kind)
+            Ui.buttonLabels(batch, a, offerButtons, pressedId)
+            batch.end()
+        }
+        drawFade(delta)
     }
 
     private fun layoutButtons(): List<Button> {
@@ -84,10 +93,19 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
         }
         val quick = game.settings.quickMatch
         val cx = uiW / 2f
-        list += Button("back", cx - 560f, 40f, 220f, 100f, "Back")
-        list += Button("length", cx - 300f, 40f, 360f, 100f, if (quick) "Quick match" else "Full match", ButtonStyle.GOLD,
+        val level = game.settings.computerLevel
+        list += Button("back", cx - 680f, 40f, 200f, 100f, "Back")
+        list += Button("length", cx - 460f, 40f, 300f, 100f, if (quick) "Quick match" else "Full match", ButtonStyle.GOLD,
             sublabel = if (quick) "${MatchConfig.QUICK_MATCH} throws each" else "${MatchConfig.FULL_MATCH} throws each")
-        list += Button("go", cx + 100f, 40f, 460f, 100f, if (twoPlayers && step == 0) "Next player" else "Play!", ButtonStyle.PRIMARY)
+        if (!twoPlayers) {
+            list += Button("level", cx - 140f, 40f, 300f, 100f, level.displayName, ButtonStyle.GOLD,
+                sublabel = when (level) {
+                    ComputerLevel.ROOKIE -> "Gentle computer"
+                    ComputerLevel.NORMAL -> "Fair fight"
+                    ComputerLevel.CHAMPION -> "Sharp aim, +50% treats"
+                })
+        }
+        list += Button("go", cx + 180f, 40f, 500f, 100f, if (twoPlayers && step == 0) "Next player" else "Play!", ButtonStyle.PRIMARY)
         offer?.let { kind ->
             val affordable = game.settings.treats >= kind.price
             if (affordable) {
@@ -104,7 +122,7 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
         s.color = Art.petColor(kind)
         s.circle(cx, cy - 8f, 92f, 40)
         icon(cx - 6f, cy - 26f, 128f) {
-            Art.petShape(s, kind, time + kind.ordinal, false, (time + kind.ordinal) % 3.4f < 0.12f, 0f)
+            Art.petOutlined(s, kind, time + kind.ordinal, false, (time + kind.ordinal) % 3.4f < 0.12f, 0f)
         }
         if (!unlocked) {
             s.color = Palette.SHADE
@@ -153,6 +171,10 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
             }
             id == "offer_close" -> offer = null
             id == "length" -> game.settings.quickMatch = !game.settings.quickMatch
+            id == "level" -> {
+                val levels = ComputerLevel.entries
+                game.settings.computerLevel = levels[(game.settings.computerLevel.ordinal + 1) % levels.size]
+            }
             id == "back" -> back()
             id == "go" -> go()
         }
@@ -170,7 +192,7 @@ class PetSelectScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseS
         val second = if (twoPlayers) chosen[1]!! else PetKind.entries.filter { it != first }.random()
         val throws = if (game.settings.quickMatch) MatchConfig.QUICK_MATCH else MatchConfig.FULL_MATCH
         val computer = if (twoPlayers) emptySet() else setOf(Side.RIGHT)
-        game.switchTo(GameScreen(game, MatchSetup(first, second, computer, throws)))
+        game.switchTo(GameScreen(game, MatchSetup(first, second, computer, throws, game.settings.computerLevel)))
     }
 
     private fun back() {

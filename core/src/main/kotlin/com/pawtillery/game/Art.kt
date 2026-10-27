@@ -20,6 +20,8 @@ object Palette {
     val GRASS = c("6CBF45")
     val GRASS_DARK = c("4E9A32")
     val GRASS_TUFT = c("82D158")
+    val LAWN_STRIPE = c("56A33A")
+    val CLOUD_SHADE = c("D9E8F2")
     val HEDGE = c("3E8E41")
     val HEDGE_LIGHT = c("4FA650")
     val FENCE = c("C08250")
@@ -99,16 +101,23 @@ object Palette {
 object Art {
     private val tmpColor = Color()
 
+    /** While true, every shape is drawn in the outline color: used to draw a pet's silhouette behind it. */
+    private var silhouette = false
+
+    private fun paint(s: ShapeRenderer, c: Color) {
+        s.color = if (silhouette) Palette.INK else c
+    }
+
     // ---- Scenery ----
 
     fun background(s: ShapeRenderer, left: Float, right: Float, top: Float, time: Float, wind: Float) {
         s.rect(left, Arena.GROUND_Y, right - left, top - Arena.GROUND_Y, Palette.SKY_BOTTOM, Palette.SKY_BOTTOM, Palette.SKY_TOP, Palette.SKY_TOP)
         val sunX = left + 4f
         val sunY = top - 3.2f
-        s.color = Palette.SUN_HALO
+        paint(s, Palette.SUN_HALO)
         s.circle(sunX, sunY, 2.1f + MathUtils.sin(time * 1.3f) * 0.08f, 40)
         s.circle(sunX, sunY, 1.65f, 40)
-        s.color = Palette.SUN
+        paint(s, Palette.SUN)
         s.circle(sunX, sunY, 1.25f, 40)
 
         val drift = 0.25f + abs(wind) * 0.35f
@@ -119,10 +128,10 @@ object Art {
             cloud(s, x, top - 2.2f - (i % 3) * 1.7f, 0.8f + (i % 2) * 0.35f)
         }
 
-        s.color = Palette.HILL_FAR
+        paint(s, Palette.HILL_FAR)
         s.ellipse(left - 6f, Arena.GROUND_Y - 4f, 22f, 9f, 48)
         s.ellipse(right - 18f, Arena.GROUND_Y - 4.5f, 26f, 10f, 48)
-        s.color = Palette.HILL_NEAR
+        paint(s, Palette.HILL_NEAR)
         s.ellipse(8f, Arena.GROUND_Y - 3.5f, 18f, 6.5f, 48)
         tree(s, 10.5f, 1.0f)
         tree(s, 21.5f, 0.85f)
@@ -130,7 +139,7 @@ object Art {
         tree(s, 29.2f, 0.95f)
 
         // Low white picket fence along the back of both yards.
-        s.color = Palette.PICKET
+        paint(s, Palette.PICKET)
         val railY = Arena.GROUND_Y + 0.35f
         s.rect(left, railY, right - left, 0.12f)
         s.rect(left, railY + 0.5f, right - left, 0.12f)
@@ -143,7 +152,12 @@ object Art {
     }
 
     private fun cloud(s: ShapeRenderer, x: Float, y: Float, k: Float) {
-        s.color = Palette.CLOUD
+        paint(s, Palette.CLOUD_SHADE)
+        s.circle(x, y - 0.14f * k, 0.9f * k, 24)
+        s.circle(x + 0.9f * k, y + 0.2f * k, 1.1f * k, 24)
+        s.circle(x + 1.9f * k, y - 0.14f * k, 0.85f * k, 24)
+        s.rect(x, y - 0.99f * k, 1.9f * k, 0.85f * k)
+        paint(s, Palette.CLOUD)
         s.circle(x, y, 0.9f * k, 24)
         s.circle(x + 0.9f * k, y + 0.35f * k, 1.1f * k, 24)
         s.circle(x + 1.9f * k, y, 0.85f * k, 24)
@@ -151,20 +165,26 @@ object Art {
     }
 
     private fun tree(s: ShapeRenderer, x: Float, k: Float) {
-        s.color = Palette.TRUNK
+        paint(s, Palette.TRUNK)
         s.rect(x - 0.18f * k, Arena.GROUND_Y, 0.36f * k, 2.4f * k)
-        s.color = Palette.TREE
+        paint(s, Palette.TREE)
         s.circle(x, Arena.GROUND_Y + 3f * k, 1.3f * k, 28)
         s.circle(x - 0.9f * k, Arena.GROUND_Y + 2.4f * k, 0.9f * k, 24)
         s.circle(x + 0.9f * k, Arena.GROUND_Y + 2.5f * k, 0.95f * k, 24)
     }
 
     fun ground(s: ShapeRenderer, left: Float, right: Float) {
-        s.color = Palette.GRASS_DARK
+        paint(s, Palette.GRASS_DARK)
         s.rect(left, Arena.VIEW_BOTTOM - 2f, right - left, Arena.GROUND_Y - Arena.VIEW_BOTTOM + 2f)
-        s.color = Palette.GRASS
+        paint(s, Palette.LAWN_STRIPE)
+        var stripe = left - (left % 3.2f) - 3.2f
+        while (stripe < right) {
+            s.rect(stripe, Arena.VIEW_BOTTOM - 2f, 1.6f, Arena.GROUND_Y - Arena.VIEW_BOTTOM + 2f)
+            stripe += 3.2f
+        }
+        paint(s, Palette.GRASS)
         s.rect(left, Arena.GROUND_Y - 0.4f, right - left, 0.4f)
-        s.color = Palette.GRASS_TUFT
+        paint(s, Palette.GRASS_TUFT)
         var x = left - (left % 0.7f) - 0.7f
         var i = 0
         while (x < right) {
@@ -183,7 +203,7 @@ object Art {
 
     private fun hedge(s: ShapeRenderer, x0: Float, x1: Float) {
         val top = Arena.HEDGE_TOP
-        s.color = Palette.HEDGE
+        paint(s, Palette.HEDGE)
         s.rect(x0, Arena.GROUND_Y, x1 - x0, top - Arena.GROUND_Y - 0.4f)
         var x = x0 + 0.4f
         while (x < x1) {
@@ -191,7 +211,7 @@ object Art {
             x += 0.7f
         }
         s.circle(x1, top - 0.45f, 0.5f, 18)
-        s.color = Palette.HEDGE_LIGHT
+        paint(s, Palette.HEDGE_LIGHT)
         var y = Arena.GROUND_Y + 0.6f
         var row = 0
         while (y < top - 0.8f) {
@@ -209,13 +229,13 @@ object Art {
         val hw = Arena.FENCE_HALF_W
         val x = Arena.FENCE_X - hw
         val h = Arena.FENCE_TOP - Arena.GROUND_Y
-        s.color = Palette.FENCE_DARK
+        paint(s, Palette.FENCE_DARK)
         s.rect(x - 0.05f, Arena.GROUND_Y, hw * 2f + 0.1f, h + 0.02f)
         s.triangle(x - 0.08f, Arena.FENCE_TOP, x + hw * 2f + 0.08f, Arena.FENCE_TOP, Arena.FENCE_X, Arena.FENCE_PEAK + 0.06f)
-        s.color = Palette.FENCE
+        paint(s, Palette.FENCE)
         s.rect(x, Arena.GROUND_Y, hw * 2f, h)
         s.triangle(x, Arena.FENCE_TOP, x + hw * 2f, Arena.FENCE_TOP, Arena.FENCE_X, Arena.FENCE_PEAK)
-        s.color = Palette.FENCE_DARK
+        paint(s, Palette.FENCE_DARK)
         s.rect(Arena.FENCE_X - 0.015f, Arena.GROUND_Y, 0.03f, h)
         var y = Arena.GROUND_Y + 0.9f
         while (y < Arena.FENCE_TOP - 0.3f) {
@@ -232,19 +252,49 @@ object Art {
 
     // ---- Pets ----
 
-    fun pet(s: ShapeRenderer, pet: Pet, time: Float) {
+    /** Draws a pet in the yard; [lift] raises it for the little hop it does when throwing. */
+    fun pet(s: ShapeRenderer, pet: Pet, time: Float, lift: Float = 0f) {
         val b = pet.body
         s.identity()
-        s.translate(b.position.x, b.position.y, 0f)
+        s.translate(b.position.x, b.position.y + lift, 0f)
         s.rotate(0f, 0f, 1f, b.angle * MathUtils.radiansToDegrees)
-        val facing = pet.side.dir
+        // Squash for a moment when hit.
+        val squash = ((pet.hitTimer - 0.6f) / 0.3f).coerceIn(0f, 1f)
+        val sx = Arena.PET_ART_SCALE * (1f + 0.12f * squash) * pet.side.dir
+        val sy = Arena.PET_ART_SCALE * (1f - 0.14f * squash)
+        s.translate(0f, -Arena.PET_H / 2f, 0f)
+        s.scale(sx, sy, 1f)
+        s.translate(0f, Arena.PET_H / 2f / Arena.PET_ART_SCALE, 0f)
         val blink = ((time + pet.side.ordinal * 1.7f) % 3.6f) < 0.12f
-        s.scale(facing * Arena.PET_ART_SCALE, Arena.PET_ART_SCALE, 1f)
-        petShape(s, pet.kind, time + pet.side.ordinal * 0.9f, pet.hitTimer > 0f, blink, pet.mess)
-        s.scale(facing / Arena.PET_ART_SCALE, 1f / Arena.PET_ART_SCALE, 1f)
+        petOutlined(s, pet.kind, time + pet.side.ordinal * 0.9f, pet.hitTimer > 0f, blink, pet.mess)
+        s.identity()
+        s.translate(b.position.x, b.position.y + lift, 0f)
+        s.rotate(0f, 0f, 1f, b.angle * MathUtils.radiansToDegrees)
         for (d in pet.decals) splat(s, d)
         s.identity()
         stink(s, b.position.x, b.position.y + Arena.PET_H / 2f, pet.mess, time)
+    }
+
+    /** [petShape] with a dark outline: the same drawing, slightly larger and solid, goes behind it. */
+    fun petOutlined(s: ShapeRenderer, kind: PetKind, t: Float, hit: Boolean, blink: Boolean, mess: Float) {
+        silhouette = true
+        s.scale(OUTLINE_GROW, OUTLINE_GROW, 1f)
+        petShape(s, kind, t, hit, blink, mess)
+        s.scale(1f / OUTLINE_GROW, 1f / OUTLINE_GROW, 1f)
+        silhouette = false
+        petShape(s, kind, t, hit, blink, mess)
+    }
+
+    private const val OUTLINE_GROW = 1.07f
+
+    /** A soft shadow on the grass under something [halfWidth] wide whose bottom is at [bottom]. */
+    fun shadow(s: ShapeRenderer, x: Float, halfWidth: Float, bottom: Float) {
+        val h = bottom - Arena.GROUND_Y
+        if (h > 8f || h < -0.5f) return
+        val k = 1f - h.coerceAtLeast(0f) / 8f
+        val w = halfWidth * 2f * (1.1f + (1f - k) * 0.6f)
+        s.color = tmpColor.set(0f, 0f, 0f, 0.2f * k)
+        s.ellipse(x - w / 2f, Arena.GROUND_Y - 0.13f, w, 0.26f, 20)
     }
 
     /** A pet drawn in its own coordinates, facing +x, centered in its 1.1 x 1.2 m body. */
@@ -259,89 +309,89 @@ object Art {
         }
         if (mess > 60f && !hit) {
             // Grumpy brows once things get messy.
-            s.color = Palette.INK
+            paint(s, Palette.INK)
             s.rectLine(0.2f, 0.4f, 0.4f, 0.34f, 0.035f)
         }
     }
 
     private fun dog(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
         val wag = MathUtils.sin(t * 9f) * 0.09f
-        s.color = Palette.DOG_DARK
+        paint(s, Palette.DOG_DARK)
         s.rectLine(-0.4f, -0.22f, -0.64f, 0.06f + wag, 0.13f)
         s.circle(-0.64f, 0.06f + wag, 0.065f, 10)
         s.ellipse(-0.52f, -0.62f, 0.34f, 0.2f, 14)
-        s.color = Palette.DOG_FUR
+        paint(s, Palette.DOG_FUR)
         s.ellipse(-0.56f, -0.58f, 0.9f, 0.62f + breathe, 24)
-        s.color = Palette.DOG_LIGHT
+        paint(s, Palette.DOG_LIGHT)
         s.ellipse(-0.04f, -0.5f, 0.34f, 0.4f, 18)
-        s.color = Palette.DOG_FUR
+        paint(s, Palette.DOG_FUR)
         s.rect(0.06f, -0.58f, 0.15f, 0.3f)
         s.rect(0.24f, -0.58f, 0.15f, 0.3f)
-        s.color = Palette.DOG_LIGHT
+        paint(s, Palette.DOG_LIGHT)
         s.ellipse(0.03f, -0.62f, 0.2f, 0.11f, 10)
         s.ellipse(0.22f, -0.62f, 0.2f, 0.11f, 10)
-        s.color = Palette.DOG_FUR
+        paint(s, Palette.DOG_FUR)
         s.circle(0.2f, 0.19f + breathe, 0.34f, 28)
-        s.color = Palette.DOG_LIGHT
+        paint(s, Palette.DOG_LIGHT)
         s.ellipse(0.28f, -0.02f + breathe, 0.34f, 0.24f, 20)
-        s.color = Palette.INK
+        paint(s, Palette.INK)
         s.circle(0.58f, 0.13f + breathe, 0.065f, 12)
         if (hit) {
-            s.color = Palette.MOUTH
+            paint(s, Palette.MOUTH)
             s.ellipse(0.38f, -0.07f, 0.15f, 0.11f, 12)
-            s.color = Palette.PINK
+            paint(s, Palette.PINK)
             s.ellipse(0.41f, -0.08f, 0.08f, 0.06f, 10)
         }
-        s.color = Palette.DOG_DARK
+        paint(s, Palette.DOG_DARK)
         s.ellipse(-0.08f, -0.02f + breathe, 0.22f, 0.44f, -14f, 16)
         eye(s, 0.31f, 0.29f + breathe, 0.075f, hit, blink, Palette.INK)
-        s.color = Palette.COLLAR
+        paint(s, Palette.COLLAR)
         s.rectLine(-0.02f, -0.1f, 0.32f, -0.16f, 0.07f)
-        s.color = Palette.GOLD
+        paint(s, Palette.GOLD)
         s.circle(0.2f, -0.21f, 0.05f, 10)
     }
 
     private fun cat(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
         val sway = MathUtils.sin(t * 2.2f) * 0.1f
-        s.color = Palette.CAT_FUR
+        paint(s, Palette.CAT_FUR)
         s.rectLine(-0.4f, -0.45f, -0.63f, -0.14f, 0.12f)
         s.rectLine(-0.63f, -0.14f, -0.58f + sway, 0.26f, 0.11f)
         s.circle(-0.63f, -0.14f, 0.06f, 10)
-        s.color = Palette.CAT_STRIPE
+        paint(s, Palette.CAT_STRIPE)
         s.circle(-0.58f + sway, 0.26f, 0.07f, 10)
-        s.color = Palette.CAT_FUR
+        paint(s, Palette.CAT_FUR)
         s.ellipse(-0.55f, -0.6f, 0.86f, 0.6f + breathe, 24)
-        s.color = Palette.CAT_STRIPE
+        paint(s, Palette.CAT_STRIPE)
         s.rectLine(-0.36f, -0.06f, -0.31f, -0.3f, 0.06f)
         s.rectLine(-0.2f, -0.02f, -0.16f, -0.27f, 0.06f)
-        s.color = Palette.CAT_LIGHT
+        paint(s, Palette.CAT_LIGHT)
         s.ellipse(-0.04f, -0.52f, 0.32f, 0.38f, 16)
-        s.color = Palette.CAT_FUR
+        paint(s, Palette.CAT_FUR)
         s.rect(0.05f, -0.58f, 0.14f, 0.28f)
         s.rect(0.22f, -0.58f, 0.14f, 0.28f)
-        s.color = Palette.CAT_LIGHT
+        paint(s, Palette.CAT_LIGHT)
         s.ellipse(0.03f, -0.62f, 0.18f, 0.1f, 10)
         s.ellipse(0.2f, -0.62f, 0.18f, 0.1f, 10)
         val hy = 0.19f + breathe
-        s.color = Palette.CAT_FUR
+        paint(s, Palette.CAT_FUR)
         s.triangle(-0.04f, hy + 0.1f, 0.04f, hy + 0.45f, 0.2f, hy + 0.24f)
         s.triangle(0.2f, hy + 0.26f, 0.38f, hy + 0.45f, 0.45f, hy + 0.1f)
-        s.color = Palette.PINK
+        paint(s, Palette.PINK)
         s.triangle(0.02f, hy + 0.16f, 0.05f, hy + 0.36f, 0.14f, hy + 0.24f)
         s.triangle(0.26f, hy + 0.26f, 0.36f, hy + 0.37f, 0.39f, hy + 0.16f)
-        s.color = Palette.CAT_FUR
+        paint(s, Palette.CAT_FUR)
         s.circle(0.2f, hy, 0.31f, 28)
-        s.color = Palette.CAT_LIGHT
+        paint(s, Palette.CAT_LIGHT)
         s.ellipse(0.25f, hy - 0.22f, 0.3f, 0.2f, 16)
         catEye(s, 0.15f, hy + 0.06f, hit, blink)
         catEye(s, 0.34f, hy + 0.06f, hit, blink)
-        s.color = Palette.PINK
+        paint(s, Palette.PINK)
         s.triangle(0.43f, hy - 0.08f, 0.53f, hy - 0.08f, 0.48f, hy - 0.14f)
         if (hit) {
-            s.color = Palette.MOUTH
+            paint(s, Palette.MOUTH)
             s.ellipse(0.4f, hy - 0.26f, 0.12f, 0.09f, 12)
         }
-        s.color = Palette.INK
+        paint(s, Palette.INK)
         s.rectLine(0.44f, hy - 0.14f, 0.68f, hy - 0.08f, 0.015f)
         s.rectLine(0.44f, hy - 0.16f, 0.68f, hy - 0.2f, 0.015f)
     }
@@ -358,42 +408,42 @@ object Art {
     private fun bunny(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
         val hy = 0.12f + breathe
         val wiggle = MathUtils.sin(t * 2.5f) * 5f
-        s.color = Palette.WHITE
+        paint(s, Palette.WHITE)
         s.circle(-0.5f, -0.3f, 0.13f, 14)
-        s.color = Palette.BUNNY_FUR
+        paint(s, Palette.BUNNY_FUR)
         s.ellipse(-0.52f, -0.6f, 0.86f, 0.62f + breathe, 24)
-        s.color = Palette.BUNNY_SHADE
+        paint(s, Palette.BUNNY_SHADE)
         s.ellipse(-0.47f, -0.62f, 0.44f, 0.17f, 14)
-        s.color = Palette.BUNNY_FUR
+        paint(s, Palette.BUNNY_FUR)
         s.ellipse(0.08f, -0.62f, 0.18f, 0.14f, 10)
         s.ellipse(0.24f, -0.62f, 0.18f, 0.14f, 10)
         // Ears
         s.ellipse(-0.08f, hy + 0.1f, 0.17f, 0.6f, 14f + wiggle, 16)
         s.ellipse(0.12f, hy + 0.14f, 0.17f, 0.62f, -4f + wiggle, 16)
-        s.color = Palette.PINK
+        paint(s, Palette.PINK)
         s.ellipse(-0.05f, hy + 0.2f, 0.09f, 0.42f, 14f + wiggle, 12)
         s.ellipse(0.15f, hy + 0.24f, 0.09f, 0.44f, -4f + wiggle, 12)
-        s.color = Palette.BUNNY_FUR
+        paint(s, Palette.BUNNY_FUR)
         s.circle(0.2f, hy, 0.3f, 28)
-        s.color = Palette.WHITE
+        paint(s, Palette.WHITE)
         s.ellipse(0.28f, hy - 0.22f, 0.26f, 0.18f, 16)
-        s.color = Palette.PINK
+        paint(s, Palette.PINK)
         s.circle(0.5f, hy - 0.08f, 0.05f, 10)
         if (hit) {
-            s.color = Palette.WHITE
+            paint(s, Palette.WHITE)
             s.rect(0.4f, hy - 0.26f, 0.08f, 0.08f)
-            s.color = Palette.INK
+            paint(s, Palette.INK)
             s.rect(0.437f, hy - 0.26f, 0.006f, 0.08f)
         }
         eye(s, 0.3f, hy + 0.06f, 0.07f, hit, blink, Palette.INK)
-        s.color = Palette.INK
+        paint(s, Palette.INK)
         s.rectLine(0.46f, hy - 0.12f, 0.68f, hy - 0.06f, 0.012f)
         s.rectLine(0.46f, hy - 0.14f, 0.68f, hy - 0.18f, 0.012f)
     }
 
     private fun turtle(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
         val bob = MathUtils.sin(t * 2f) * 0.02f
-        s.color = Palette.TURTLE_SKIN
+        paint(s, Palette.TURTLE_SKIN)
         s.ellipse(-0.44f, -0.62f, 0.28f, 0.2f, 12)
         s.ellipse(0.16f, -0.62f, 0.28f, 0.2f, 12)
         s.triangle(-0.5f, -0.36f, -0.5f, -0.46f, -0.68f, -0.44f)
@@ -401,24 +451,24 @@ object Art {
         s.rectLine(0.22f, -0.3f, 0.4f, -0.02f + bob, 0.2f)
         s.circle(0.44f, 0.02f + bob, 0.21f, 22)
         if (hit) {
-            s.color = Palette.MOUTH
+            paint(s, Palette.MOUTH)
             s.ellipse(0.5f, -0.1f + bob, 0.12f, 0.07f, 10)
         } else {
-            s.color = Palette.INK
+            paint(s, Palette.INK)
             s.rectLine(0.5f, -0.07f + bob, 0.62f, -0.05f + bob, 0.02f)
         }
         eye(s, 0.5f, 0.07f + bob, 0.06f, hit, blink, Palette.INK)
         // Shell: a half-dome stretched upward, with spots and a rim.
-        s.color = Palette.TURTLE_SHELL_DARK
+        paint(s, Palette.TURTLE_SHELL_DARK)
         domeShape(s, -0.06f, -0.42f, 0.54f, 1.85f + breathe)
-        s.color = Palette.TURTLE_SHELL
+        paint(s, Palette.TURTLE_SHELL)
         domeShape(s, -0.06f, -0.42f, 0.49f, 1.85f + breathe)
-        s.color = Palette.TURTLE_SPOT
+        paint(s, Palette.TURTLE_SPOT)
         s.circle(-0.06f, 0.12f, 0.15f, 16)
         s.circle(-0.3f, -0.12f, 0.12f, 14)
         s.circle(0.18f, -0.12f, 0.12f, 14)
         s.circle(-0.06f, -0.28f, 0.1f, 12)
-        s.color = Palette.TURTLE_SHELL_DARK
+        paint(s, Palette.TURTLE_SHELL_DARK)
         s.rect(-0.62f, -0.48f, 1.12f, 0.1f)
     }
 
@@ -432,30 +482,30 @@ object Art {
 
     private fun parrot(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
         val flap = MathUtils.sin(t * 6f) * 4f
-        s.color = Palette.PARROT_BLUE
+        paint(s, Palette.PARROT_BLUE)
         s.rectLine(-0.25f, -0.25f, -0.6f, -0.58f, 0.13f)
-        s.color = Palette.PARROT_GREEN
+        paint(s, Palette.PARROT_GREEN)
         s.rectLine(-0.2f, -0.3f, -0.48f, -0.62f, 0.11f)
-        s.color = Palette.HUB
+        paint(s, Palette.HUB)
         s.rect(-0.08f, -0.6f, 0.06f, 0.14f)
         s.rect(0.08f, -0.6f, 0.06f, 0.14f)
-        s.color = Palette.PARROT_RED
+        paint(s, Palette.PARROT_RED)
         s.ellipse(-0.34f, -0.52f, 0.64f, 0.86f + breathe, 24)
-        s.color = Palette.PARROT_GREEN
+        paint(s, Palette.PARROT_GREEN)
         s.ellipse(-0.34f, -0.36f, 0.4f, 0.6f, 12f + flap, 16)
-        s.color = Palette.PARROT_BLUE
+        paint(s, Palette.PARROT_BLUE)
         s.ellipse(-0.34f, -0.4f, 0.22f, 0.3f, 12f + flap, 12)
         val hy = 0.3f + breathe
-        s.color = Palette.PARROT_RED
+        paint(s, Palette.PARROT_RED)
         s.triangle(-0.02f, hy + 0.15f, 0.06f, hy + 0.36f, 0.14f, hy + 0.2f)
         s.triangle(0.1f, hy + 0.2f, 0.2f, hy + 0.38f, 0.26f, hy + 0.18f)
         s.circle(0.12f, hy, 0.27f, 26)
-        s.color = Palette.WHITE
+        paint(s, Palette.WHITE)
         s.ellipse(0.14f, hy - 0.1f, 0.22f, 0.26f, 16)
         eye(s, 0.24f, hy + 0.04f, 0.065f, hit, blink, Palette.INK)
-        s.color = Palette.BEAK
+        paint(s, Palette.BEAK)
         s.triangle(0.33f, hy + 0.06f, 0.33f, hy - 0.12f, 0.56f, hy - 0.06f)
-        s.color = Palette.INK
+        paint(s, Palette.INK)
         if (hit) s.triangle(0.33f, hy - 0.14f, 0.33f, hy - 0.24f, 0.48f, hy - 0.2f)
         else s.triangle(0.33f, hy - 0.08f, 0.33f, hy - 0.16f, 0.46f, hy - 0.1f)
     }
@@ -463,20 +513,20 @@ object Art {
     private fun eye(s: ShapeRenderer, x: Float, y: Float, r: Float, hit: Boolean, blink: Boolean, pupil: Color) {
         when {
             hit -> {
-                s.color = Palette.INK
+                paint(s, Palette.INK)
                 s.rectLine(x - r, y - r, x + r, y + r, 0.035f)
                 s.rectLine(x - r, y + r, x + r, y - r, 0.035f)
             }
             blink -> {
-                s.color = Palette.INK
+                paint(s, Palette.INK)
                 s.rectLine(x - r, y, x + r, y, 0.035f)
             }
             else -> {
-                s.color = Palette.WHITE
+                paint(s, Palette.WHITE)
                 s.circle(x, y, r, 14)
-                s.color = pupil
+                paint(s, pupil)
                 s.circle(x + r * 0.3f, y, r * 0.58f, 12)
-                s.color = Palette.WHITE
+                paint(s, Palette.WHITE)
                 s.circle(x + r * 0.45f, y + r * 0.25f, r * 0.2f, 8)
             }
         }
@@ -486,18 +536,18 @@ object Art {
         val r = 0.065f
         when {
             hit -> {
-                s.color = Palette.INK
+                paint(s, Palette.INK)
                 s.rectLine(x - r, y - r, x + r, y + r, 0.03f)
                 s.rectLine(x - r, y + r, x + r, y - r, 0.03f)
             }
             blink -> {
-                s.color = Palette.INK
+                paint(s, Palette.INK)
                 s.rectLine(x - r, y, x + r, y, 0.03f)
             }
             else -> {
-                s.color = Palette.CAT_EYE
+                paint(s, Palette.CAT_EYE)
                 s.ellipse(x - 0.055f, y - 0.07f, 0.11f, 0.14f, 14)
-                s.color = Palette.INK
+                paint(s, Palette.INK)
                 s.ellipse(x - 0.015f, y - 0.055f, 0.03f, 0.11f, 10)
             }
         }
@@ -506,7 +556,7 @@ object Art {
     /** Flies and stink lines for a very messy pet. */
     private fun stink(s: ShapeRenderer, x: Float, top: Float, mess: Float, t: Float) {
         if (mess >= 75f) {
-            s.color = tmpColor.set(0.45f, 0.6f, 0.2f, 0.55f)
+            paint(s, tmpColor.set(0.45f, 0.6f, 0.2f, 0.55f))
             for (i in 0 until 3) {
                 val bx = x - 0.35f + i * 0.35f
                 val phase = t * 3f + i
@@ -525,10 +575,10 @@ object Art {
             val a = t * (3f + i) + i * 2.1f
             val fx = x + MathUtils.cos(a) * (0.55f + i * 0.1f)
             val fy = top + 0.35f + MathUtils.sin(a * 1.7f) * 0.25f
-            s.color = tmpColor.set(1f, 1f, 1f, 0.7f)
+            paint(s, tmpColor.set(1f, 1f, 1f, 0.7f))
             s.ellipse(fx - 0.07f, fy, 0.08f, 0.05f, 8)
             s.ellipse(fx, fy, 0.08f, 0.05f, 8)
-            s.color = Palette.INK
+            paint(s, Palette.INK)
             s.circle(fx, fy, 0.045f, 8)
         }
     }
@@ -552,7 +602,7 @@ object Art {
         val hw = w / 2f
         val hh = h / 2f
         fun col(c: Color) {
-            s.color = tmpColor.set(c.r, c.g, c.b, c.a * alpha)
+            paint(s, tmpColor.set(c.r, c.g, c.b, c.a * alpha))
         }
         when (type) {
             PieceType.BOX -> {
@@ -636,63 +686,63 @@ object Art {
     }
 
     private fun seed(s: ShapeRenderer, r: Float) {
-        s.color = Palette.SEED_DARK
+        paint(s, Palette.SEED_DARK)
         s.ellipse(-r * 1.1f, -r * 0.75f, r * 2.2f, r * 1.5f, 18)
-        s.color = Palette.SEED
+        paint(s, Palette.SEED)
         s.ellipse(-r * 0.95f, -r * 0.6f, r * 1.9f, r * 1.2f, 18)
     }
 
     fun itemShape(s: ShapeRenderer, item: ItemType, r: Float) {
         when (item) {
             ItemType.MUD -> {
-                s.color = Palette.MUD_DARK; s.circle(0f, 0f, r, 18)
-                s.color = Palette.MUD; s.circle(0f, 0f, r * 0.88f, 18)
-                s.color = Palette.MUD_DARK
+                paint(s, Palette.MUD_DARK); s.circle(0f, 0f, r, 18)
+                paint(s, Palette.MUD); s.circle(0f, 0f, r * 0.88f, 18)
+                paint(s, Palette.MUD_DARK)
                 s.circle(r * 0.35f, r * 0.2f, r * 0.2f, 10)
                 s.circle(-r * 0.3f, -r * 0.3f, r * 0.16f, 10)
                 s.circle(-r * 0.2f, r * 0.4f, r * 0.12f, 8)
             }
             ItemType.WATER -> {
-                s.color = Palette.WATER
+                paint(s, Palette.WATER)
                 s.circle(0f, 0f, r, 22)
                 s.triangle(-r * 0.25f, -r * 0.92f, r * 0.25f, -r * 0.92f, 0f, -r * 1.25f)
-                s.color = tmpColor.set(1f, 1f, 1f, 0.65f)
+                paint(s, tmpColor.set(1f, 1f, 1f, 0.65f))
                 s.ellipse(-r * 0.6f, r * 0.1f, r * 0.42f, r * 0.55f, 30f, 12)
             }
             ItemType.BOWLING -> {
-                s.color = Palette.BOWLING; s.circle(0f, 0f, r, 24)
-                s.color = Palette.INK
+                paint(s, Palette.BOWLING); s.circle(0f, 0f, r, 24)
+                paint(s, Palette.INK)
                 s.circle(r * 0.3f, r * 0.42f, r * 0.13f, 8)
                 s.circle(r * 0.55f, r * 0.15f, r * 0.13f, 8)
                 s.circle(r * 0.05f, r * 0.12f, r * 0.15f, 8)
-                s.color = tmpColor.set(1f, 1f, 1f, 0.3f)
+                paint(s, tmpColor.set(1f, 1f, 1f, 0.3f))
                 s.circle(-r * 0.4f, r * 0.35f, r * 0.18f, 10)
             }
             ItemType.BONE -> {
                 val k = r / ItemType.BONE.radius
-                s.color = Palette.PANEL_EDGE
+                paint(s, Palette.PANEL_EDGE)
                 s.rect(-0.33f * k, -0.085f * k, 0.66f * k, 0.17f * k)
                 for (sx in floatArrayOf(-0.33f, 0.33f)) for (sy in floatArrayOf(-0.08f, 0.08f)) s.circle(sx * k, sy * k, 0.105f * k, 12)
-                s.color = Palette.BONE
+                paint(s, Palette.BONE)
                 s.rect(-0.33f * k, -0.06f * k, 0.66f * k, 0.12f * k)
                 for (sx in floatArrayOf(-0.33f, 0.33f)) for (sy in floatArrayOf(-0.08f, 0.08f)) s.circle(sx * k, sy * k, 0.085f * k, 12)
             }
             ItemType.CARROT -> {
                 val k = r / ItemType.CARROT.radius
-                s.color = Palette.LEAF
+                paint(s, Palette.LEAF)
                 s.triangle(-0.2f * k, 0f, -0.42f * k, 0.14f * k, -0.38f * k, 0.02f * k)
                 s.triangle(-0.2f * k, 0f, -0.42f * k, -0.14f * k, -0.38f * k, -0.02f * k)
                 s.triangle(-0.2f * k, 0f, -0.46f * k, 0.04f * k, -0.46f * k, -0.04f * k)
-                s.color = Palette.CARROT
+                paint(s, Palette.CARROT)
                 s.triangle(0.36f * k, 0f, -0.22f * k, 0.13f * k, -0.22f * k, -0.13f * k)
-                s.color = Palette.ACCENT_DARK
+                paint(s, Palette.ACCENT_DARK)
                 s.rectLine(-0.1f * k, 0.06f * k, -0.04f * k, 0.02f * k, 0.02f * k)
                 s.rectLine(0.06f * k, -0.05f * k, 0.12f * k, -0.02f * k, 0.02f * k)
             }
             ItemType.SHELL -> {
-                s.color = Palette.TURTLE_SHELL_DARK; s.circle(0f, 0f, r, 22)
-                s.color = Palette.TURTLE_SHELL; s.circle(0f, 0f, r * 0.86f, 22)
-                s.color = Palette.TURTLE_SPOT
+                paint(s, Palette.TURTLE_SHELL_DARK); s.circle(0f, 0f, r, 22)
+                paint(s, Palette.TURTLE_SHELL); s.circle(0f, 0f, r * 0.86f, 22)
+                paint(s, Palette.TURTLE_SPOT)
                 s.circle(0f, 0f, r * 0.3f, 12)
                 for (i in 0 until 6) {
                     val a = i * 60f
@@ -700,9 +750,9 @@ object Art {
                 }
             }
             ItemType.SEEDS -> {
-                s.color = Palette.SEED_DARK; s.circle(0f, 0f, r, 20)
-                s.color = Palette.SEED; s.circle(0f, 0f, r * 0.86f, 20)
-                s.color = Palette.SEED_DARK
+                paint(s, Palette.SEED_DARK); s.circle(0f, 0f, r, 20)
+                paint(s, Palette.SEED); s.circle(0f, 0f, r * 0.86f, 20)
+                paint(s, Palette.SEED_DARK)
                 for (i in 0 until 7) {
                     val a = i * 51f + 10f
                     val d = if (i % 2 == 0) r * 0.5f else r * 0.2f
@@ -710,7 +760,7 @@ object Art {
                 }
             }
             ItemType.HAIRBALL -> {
-                s.color = Palette.HAIR_DARK
+                paint(s, Palette.HAIR_DARK)
                 for (i in 0 until 9) {
                     val a = i * 40f
                     s.triangle(
@@ -719,8 +769,8 @@ object Art {
                         MathUtils.cosDeg(a) * r * 1.25f, MathUtils.sinDeg(a) * r * 1.25f,
                     )
                 }
-                s.color = Palette.HAIR; s.circle(0f, 0f, r, 18)
-                s.color = Palette.HAIR_DARK
+                paint(s, Palette.HAIR); s.circle(0f, 0f, r, 18)
+                paint(s, Palette.HAIR_DARK)
                 s.rectLine(-r * 0.5f, 0f, r * 0.4f, r * 0.3f, 0.025f)
                 s.rectLine(-r * 0.3f, -r * 0.4f, r * 0.5f, -r * 0.1f, 0.025f)
             }
@@ -742,7 +792,7 @@ object Art {
 
     /** A blob with a few droplets, shaped by the decal's seed so each splat looks different. */
     fun splat(s: ShapeRenderer, d: Decal) {
-        s.color = splatColor(d.item)
+        paint(s, splatColor(d.item))
         if (d.item == ItemType.WATER) {
             for (i in 0 until 3) {
                 val ox = ((d.seed shr (i * 3)) and 7) / 7f - 0.5f

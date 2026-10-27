@@ -44,11 +44,14 @@ sealed interface MatchEvent {
     data class Split(val x: Float, val y: Float) : MatchEvent
     data class Splat(val x: Float, val y: Float, val item: ItemType) : MatchEvent
     data class Burst(val x: Float, val y: Float) : MatchEvent
-    /** [item] is null when a falling fort piece did the damage. */
-    data class PetHit(val side: Side, val amount: Float, val x: Float, val y: Float, val item: ItemType?) : MatchEvent
+    /** [item] is null when a falling fort piece did the damage; [trick] names a skill shot. */
+    data class PetHit(val side: Side, val amount: Float, val x: Float, val y: Float, val item: ItemType?, val trick: String? = null) : MatchEvent
     data class Thud(val strength: Float, val tire: Boolean) : MatchEvent
     data class GameOver(val winner: Side?) : MatchEvent
 }
+
+/** How one player's throws went. */
+data class ThrowStats(val throws: Int, val hits: Int, val tricks: Int)
 
 /**
  * One game: the Box2D world plus the rules (build phase, turns, wind, inventories, mess, winning).
@@ -83,6 +86,10 @@ class Match(val config: MatchConfig) : Disposable {
         private set
 
     private val throwsDone = IntArray(2)
+    private val throwsThatHit = IntArray(2)
+    private val trickShots = IntArray(2)
+    private var throwHit = false
+    private var fragmentHits = 0
     private val inventory = Array(2) { IntArray(ItemType.entries.size) }
     private val lastVelocity = arrayOfNulls<Vector2>(2)
     private val events = ArrayList<MatchEvent>()
@@ -127,6 +134,8 @@ class Match(val config: MatchConfig) : Disposable {
     fun piecesLeft(side: Side): Int = Arena.PIECES_PER_PLAYER - pieces.count { it.side == side }
 
     fun lastVelocity(side: Side): Vector2? = lastVelocity[side.ordinal]
+
+    fun stats(side: Side) = ThrowStats(throwsDone[side.ordinal], throwsThatHit[side.ordinal], trickShots[side.ordinal])
 
     fun drainEvents(out: MutableList<MatchEvent>) {
         out.addAll(events)
@@ -192,6 +201,8 @@ class Match(val config: MatchConfig) : Disposable {
         val origin = Arena.launchPoint(side)
         val p = spawnProjectile(item, side, origin.x, origin.y, v.x, v.y, fragment = false)
         if (item.splitCount > 0) activeSplitter = p
+        throwHit = false
+        fragmentHits = 0
         phase = Phase.FLIGHT
         events.add(MatchEvent.Thrown(side, item))
         return true
@@ -276,6 +287,7 @@ class Match(val config: MatchConfig) : Disposable {
 
     private fun endTurn() {
         throwsDone[turn.ordinal]++
+        if (throwHit) throwsThatHit[turn.ordinal]++
         val l = pet(Side.LEFT).mess
         val r = pet(Side.RIGHT).mess
         val someoneLost = l >= Arena.MESS_TO_LOSE || r >= Arena.MESS_TO_LOSE
@@ -312,12 +324,12 @@ class Match(val config: MatchConfig) : Disposable {
                 is Pet -> {
                     if (!p.scoredPet) {
                         p.scoredPet = true
-                        addMess(other, p.mess * speedFactor(hit.speed), hit.x, hit.y, p.item)
+                        addMess(other, p.mess * speedFactor(hit.speed), hit.x, hit.y, p.item, trickFor(p))
                     }
                     if (p.item.splatsOnContact) splat(p, other.body, other.decals, PET_DECALS, hit.x, hit.y)
                 }
-                is Piece -> if (p.item.splatsOnContact) splat(p, other.body, other.decals, PIECE_DECALS, hit.x, hit.y)
-                else -> if (p.item.splatsOnContact) splat(p, null, groundDecals, GROUND_DECALS, hit.x, hit.y)
+                is Piece -> if (p.item.splatsOnContact) splat(p, other.body, other.decals, PIECE_DECALS, hit.x, hit.y) else p.bounces++
+                else -> if (p.item.splatsOnContact) splat(p, null, groundDecals, GROUND_DECALS, hit.x, hit.y) else p.bounces++
             }
         }
         hits.clear()
@@ -339,14 +351,35 @@ class Match(val config: MatchConfig) : Disposable {
         crushes.clear()
     }
 
+    /** Names a skill shot: a boomerang hitting on its way back, a roller that banked in, or several split pieces landing. */
+    private fun trickFor(p: Projectile): String? {
+        if (p.fragment) {
+            fragmentHits++
+            return when (fragmentHits) {
+                1 -> null
+                2 -> "Double!"
+                3 -> "Triple!"
+                else -> "Combo x$fragmentHits!"
+            }
+        }
+        return when {
+            p.item.returnAccel > 0f && p.body.linearVelocity.x * p.side.dir < 0f -> "Boomerang!"
+            !p.item.splatsOnContact && p.bounces > 0 -> "Bank shot!"
+            else -> null
+        }
+    }
+
     private fun speedFactor(speed: Float) = (speed / 12f).coerceIn(0.6f, 1.25f)
 
-    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?) {
+    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?, trick: String? = null) {
         if (amount < 0.5f) return
         val before = pet.mess
         pet.mess = min(Arena.MESS_TO_LOSE, pet.mess + amount)
         pet.hitTimer = 0.9f
-        events.add(MatchEvent.PetHit(pet.side, pet.mess - before, x, y, item))
+        val gained = pet.mess - before
+        if (item != null && pet.side != turn && gained >= HIT_THRESHOLD) throwHit = true
+        if (trick != null && pet.side != turn) trickShots[turn.ordinal]++
+        events.add(MatchEvent.PetHit(pet.side, gained, x, y, item, trick))
     }
 
     private fun splat(p: Projectile, body: Body?, decals: MutableList<Decal>, cap: Int, x: Float, y: Float) {
@@ -597,6 +630,8 @@ class Match(val config: MatchConfig) : Disposable {
         const val CRUSH_IMPULSE = 3f
         const val MAX_CRUSH_PER_TURN = 20f
         const val THUD_IMPULSE = 2.5f
+        /** Mess a throw must add to count as a hit in the stats (near-miss spatter doesn't). */
+        const val HIT_THRESHOLD = 5f
         private const val PET_DECALS = 40
         private const val PIECE_DECALS = 12
         private const val GROUND_DECALS = 50

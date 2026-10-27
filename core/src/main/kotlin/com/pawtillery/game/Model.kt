@@ -148,6 +148,8 @@ class Projectile(val item: ItemType, val side: Side, val body: Body, val fragmen
     var age = 0f
     var dead = false
     var scoredPet = false
+    /** Times it hit something other than a pet; a heavy roller that bounces before hitting is a bank shot. */
+    var bounces = 0
 
     val radius: Float get() = if (fragment) item.fragmentRadius else item.radius
     val mess: Float get() = if (fragment) item.fragmentMess else item.mess

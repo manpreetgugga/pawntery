@@ -71,6 +71,7 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(6.8f) { shot("07-build-auto") }
         at(6.9f) { tap("ready") }
         at(8.2f) { shot("08-computer-building") }
+        at(11.6f) { tap("angle+"); tap("angle+"); tap("power+") }
         at(12f) { shot("09-your-turn") }
         at(12.1f) { down(screen.uiOnScreen(800f, 450f)) }
         at(12.2f) { drag(screen.uiOnScreen(700f, 380f)) }

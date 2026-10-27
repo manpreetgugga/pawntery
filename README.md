@@ -16,10 +16,11 @@ Two neighbors' pets live on either side of a garden fence. First each player **b
 ## How to play
 
 - **Build:** tap a piece (box, crate, plank, flower pot, gnome, tire), then touch your yard to drop it. Pieces stack and topple for real. "Turn" rotates, "Undo" takes the last one back, "Auto" builds a fort for you.
-- **Throw:** drag back anywhere and let go, like a slingshot. Further back throws harder.
+- **Throw:** drag back anywhere and let go, like a slingshot. Further back throws harder. For precise, repeatable shots, use the **angle and power** steppers (one degree or one percent per tap, hold to repeat) and tap **Throw!**. Your aim is kept between turns, so you can adjust from your last throw.
+- **Trick shots:** a boomerang that hits on its way back, a bowling ball or shell that banks off something first, or two or more split pieces landing (Double!, Triple!) each earn a 5-treat bonus.
 - **Items:** Mud Ball (unlimited), Water Balloon (soaks everything nearby, even behind walls), Bowling Ball (smashes forts), plus each pet's signature throw.
 - **Modes:** *Easy* shows the full aim guide and has no wind. *Pro* has wind that changes every turn and only a short aim guide.
-- **Play vs Computer** or **2 Players on one phone**, as a *Quick* (5 throws each) or *Full* (10 throws each) match.
+- **Play vs Computer** (Rookie, Normal or Champion; Champion wins pay 50% more treats) or **2 Players on one phone**, as a *Quick* (5 throws each) or *Full* (10 throws each) match.
 
 ### Pets
 

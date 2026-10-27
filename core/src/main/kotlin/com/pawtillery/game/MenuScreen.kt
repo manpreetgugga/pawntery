@@ -56,6 +56,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         }
         Ui.buttonLabels(batch, a, buttons, pressedId)
         batch.end()
+        drawFade(delta)
     }
 
     private fun scenePiece(type: PieceType, x: Float, y: Float) {
@@ -71,7 +72,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         s.translate(x, Arena.GROUND_Y + Arena.PET_H / 2f, 0f)
         s.scale(side.dir * Arena.PET_ART_SCALE, Arena.PET_ART_SCALE, 1f)
         val hit = side == Side.RIGHT && (time % 2.6f) in 2.15f..2.6f
-        Art.petShape(s, kind, time + side.ordinal, hit, (time + side.ordinal) % 3.3f < 0.12f, 0f)
+        Art.petOutlined(s, kind, time + side.ordinal, hit, (time + side.ordinal) % 3.3f < 0.12f, 0f)
         s.identity()
     }
 
