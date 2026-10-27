@@ -34,6 +34,22 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build the debug APK
         run: ./gradlew :android:assembleDebug --console=plain
+      # Without libGDX's native libraries the app closes the moment it starts, so make sure every
+      # phone architecture has them, along with the game's sounds, music and fonts.
+      - name: Check the APK contents
+        run: |
+          apk=$(ls android/build/outputs/apk/debug/*.apk)
+          unzip -l "$apk" > apk-contents.txt
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            for lib in libgdx.so libgdx-box2d.so libgdx-freetype.so; do
+              grep -q "lib/$abi/$lib" apk-contents.txt || { echo "Missing lib/$abi/$lib"; exit 1; }
+            done
+          done
+          for asset in music/match.ogg sounds/splat.wav fonts/TitanOne-Regular.ttf; do
+            grep -q "assets/$asset" apk-contents.txt || { echo "Missing assets/$asset"; exit 1; }
+          done
+          grep -E "lib/|assets/music" apk-contents.txt
+          ls -l "$apk"
       - uses: actions/upload-artifact@v4
         with:
           name: pawtillery-debug-apk

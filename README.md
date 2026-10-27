@@ -1,8 +1,19 @@
 # Pawtillery
 
+![Pawtillery](store/feature-graphic-1024x500.png)
+
 A turn-based backyard throwing game for Android, for kids and grown-ups.
 
 Two neighbors' pets live on either side of a garden fence. First each player **builds a fort** from household junk to protect their pet. Then they take turns **throwing messy things over the fence**. Every hit fills the other pet's **mess meter**. A pet at 100% mess loses; after 10 throws each, the cleaner pet wins.
+
+## Play it on your phone
+
+**Easiest: download the APK GitHub builds for you.** Every push to `main` runs the *Build* workflow (Actions tab), which tests the game and builds the Android app.
+1. Open the repository on GitHub > **Actions** > the latest green **Build** run.
+2. Under **Artifacts**, download **pawtillery-debug-apk** (a zip with the `.apk` inside).
+3. Copy the `.apk` to your phone and open it. Android asks you to allow installing from that app (Files or your browser) once.
+
+Or build it yourself in Android Studio (see [Build the Android app](#build-the-android-app)).
 
 ## What makes it different
 
@@ -67,7 +78,7 @@ Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 
 | `core/` | The whole game in Kotlin with libGDX + Box2D: rules (`Match.kt`), computer player, drawing, screens |
 | `android/` | Android launcher, manifest, icon |
 | `lwjgl3/` | Desktop window for quick testing on a computer (`./gradlew :lwjgl3:run`) |
-| `assets/` | Fonts and sound effects shared by both |
+| `assets/` | Fonts, sound effects and music shared by both |
 | `store/` | Play Store icon, feature graphic, screenshots and listing text (`./gradlew -p tools/desktop-build :lwjgl3:storeAssets` redraws the icons and feature graphic) |
 | `tools/gen_sounds.py` | Regenerates the sound effects and pet voices (`python3 tools/gen_sounds.py`, standard library only) |
 | `tools/gen_music.py` | Regenerates the two music loops (`python3 tools/gen_music.py`, needs numpy and ffmpeg) |
@@ -77,6 +88,23 @@ Run the unit tests with `./gradlew :core:test`. They play full computer-vs-compu
 No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-build :core:test :lwjgl3:build` builds and tests everything except the Android launcher.
 
 `./gradlew :lwjgl3:tour --args="<out-dir> 1280 720"` plays a scripted session through real touch input and saves a screenshot of every screen, for checking the look without a phone.
+
+## Next steps to earn money
+
+1. **Play it on real phones** (yours, your family's): the APK above. Note what's confusing or too hard, especially for kids.
+2. **Google Play developer account** ($25 one-time) at <https://play.google.com/console>.
+3. **Publish the privacy policy** somewhere public, fill in your support email in `docs/privacy-policy.md` and `store/listing.md`, and put its address in `ParentGate.PRIVACY_URL`.
+4. **Create the app** in Play Console, fill in the store listing from `store/`, answer content rating / target audience (Families) / Data safety as described in `docs/MONETIZATION.md`.
+5. **Release free first** (internal testing, then a closed test with friends and family; Google requires a closed test with testers for new personal accounts before production).
+6. **Switch on Plus and the rewarded ad** with `docs/MONETIZATION.md` once you have players: the game is built for it, and the Shop and ad button appear automatically.
+7. **Keep players coming back**: new Trick Shot packs, seasonal cosmetics, events. The Daily already gives a reason to open the game every day.
+
+## Honest notes
+
+- This project was built in a cloud environment that cannot download Google's Android build tools, so the Android app itself was never built there. The GitHub Actions workflow builds it on GitHub's machines; check that its *Android APK* job is green.
+- The game logic, physics, computer player, levels and money rules are covered by 28 unit tests, and every screen was checked with screenshots from the desktop test build.
+- All art is drawn in code and all sound and music is synthesized. They are consistent and light (the whole game is under 1 MB of assets), but a professional artist and composer would lift it further.
+- The store and ad code for Android in `docs/MONETIZATION.md` is written but not yet compiled; Android Studio will point out anything that changed in Google's libraries.
 
 ## Credits
 
