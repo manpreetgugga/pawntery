@@ -19,7 +19,11 @@ class Challenge(
     val maxThrows: Int,
     val threeStars: Int,
     val twoStars: Int,
+    /** For the daily challenge: the day it belongs to (days since 1970-01-01); null for Trick Shot levels. */
+    val day: Long? = null,
 ) {
+    val isDaily: Boolean get() = day != null
+
     fun fortPlacements(): List<Placement> {
         val petX = Arena.petX(Side.RIGHT)
         return fort.map { (type, rotated, offset) -> Placement(type, rotated, petX + Side.RIGHT.dir * offset) }
@@ -118,4 +122,35 @@ object Challenges {
     )
 
     fun byNumber(n: Int): Challenge? = all.firstOrNull { it.number == n }
+
+    /**
+     * Today's challenge, the same for everyone on the same date: a random pet pairing, fort and wind,
+     * built from the same parts as the hand-made levels so it is always fair.
+     */
+    fun daily(day: Long): Challenge {
+        val rng = kotlin.random.Random(day * 7919 + 13)
+        val pets = PetKind.entries
+        val player = pets[rng.nextInt(pets.size)]
+        val target = pets.filter { it != player }[rng.nextInt(pets.size - 1)]
+        val fort = ArrayList<Triple<PieceType, Boolean, Float>>()
+        val roof = rng.nextFloat() < 0.4f
+        // With a roof, the wall stands clear of the roof's front post so nothing lands on it.
+        val wallAt = if (roof) 2.5f + rng.nextFloat() * 0.6f else 1.9f + rng.nextFloat() * 1.2f
+        val wall = listOf(crate, box)
+        repeat(1 + rng.nextInt(3)) { fort += p(wall[rng.nextInt(2)], wallAt) }
+        if (roof) fort += listOf(p(gnome, 1.3f), p(gnome, -1.3f), p(plank, 0f))
+        val extras = listOf(pot, tire, box, gnome)
+        repeat(rng.nextInt(3)) { fort += p(extras[rng.nextInt(extras.size)], if (rng.nextBoolean()) -2.6f else 3.9f) }
+        val wind = (rng.nextInt(-6, 7) * 0.5f)
+        val items = listOf(player.signature to 3, ItemType.WATER to 1, ItemType.MUD to -1)
+        val windText = when {
+            wind == 0f -> "no wind"
+            wind * Side.LEFT.dir > 0f -> "a tailwind"
+            else -> "a headwind"
+        }
+        return Challenge(
+            0, "Daily Challenge", "${player.displayName} against ${target.displayName} with $windText. A new one every day!",
+            player, target, items, fort, wind, goal = 40f, maxThrows = 7, threeStars = 3, twoStars = 5, day = day,
+        )
+    }
 }

@@ -112,6 +112,63 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         return earned
     }
 
+    // ---- Lifetime stats ----
+
+    val totalThrows: Int get() = prefs.getInteger("stats.throws", 0)
+    val totalHits: Int get() = prefs.getInteger("stats.hits", 0)
+    val totalTricks: Int get() = prefs.getInteger("stats.tricks", 0)
+    val championWins: Int get() = prefs.getInteger("stats.championWins", 0)
+    val winStreak: Int get() = prefs.getInteger("stats.streak", 0)
+    val bestStreak: Int get() = prefs.getInteger("stats.bestStreak", 0)
+    val twoPlayerGames: Int get() = prefs.getInteger("stats.twoPlayerGames", 0)
+    val dailiesDone: Int get() = prefs.getInteger("stats.dailies", 0)
+
+    /** Adds one finished game to the lifetime stats (treats and wins are recorded separately). */
+    fun recordStats(summary: GameSummary) {
+        prefs.putInteger("stats.throws", totalThrows + summary.throws)
+        prefs.putInteger("stats.hits", totalHits + summary.hits)
+        prefs.putInteger("stats.tricks", totalTricks + summary.tricks.size)
+        if (summary.kind == GameKind.TWO_PLAYERS) prefs.putInteger("stats.twoPlayerGames", twoPlayerGames + 1)
+        if (summary.kind == GameKind.VS_COMPUTER) {
+            val streak = if (summary.won) winStreak + 1 else 0
+            prefs.putInteger("stats.streak", streak)
+            if (streak > bestStreak) prefs.putInteger("stats.bestStreak", streak)
+            if (summary.won && summary.level == ComputerLevel.CHAMPION) prefs.putInteger("stats.championWins", championWins + 1)
+        }
+        prefs.flush()
+    }
+
+    fun hasTrophy(t: Trophy): Boolean = prefs.getBoolean("trophy.${t.name}", false)
+
+    /** Marks [t] as earned and pays its reward; returns the treats paid. */
+    fun grantTrophy(t: Trophy): Int {
+        if (hasTrophy(t)) return 0
+        val reward = t.reward * treatMultiplier
+        prefs.putBoolean("trophy.${t.name}", true)
+        prefs.putInteger("treats", treats + reward)
+        prefs.flush()
+        return reward
+    }
+
+    // ---- Daily challenge ----
+
+    fun dailyStars(day: Long): Int = prefs.getInteger("daily.$day.stars", 0)
+
+    /** Saves today's result; the first finish of each day pays 30 treats and counts toward Daily Regular. */
+    fun recordDaily(day: Long, stars: Int): Int {
+        val before = dailyStars(day)
+        if (stars <= before) return 0
+        prefs.putInteger("daily.$day.stars", stars)
+        var earned = 0
+        if (before == 0) {
+            earned = DAILY_REWARD * treatMultiplier
+            prefs.putInteger("treats", treats + earned)
+            prefs.putInteger("stats.dailies", dailiesDone + 1)
+        }
+        prefs.flush()
+        return earned
+    }
+
     fun challengeStars(number: Int): Int = prefs.getInteger("challenge.$number.stars", 0)
 
     val totalStars: Int get() = Challenges.all.sumOf { challengeStars(it.number) }
@@ -139,3 +196,4 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
 enum class GameResult { WIN, DRAW, LOSS }
 
 const val MAX_ADS_PER_DAY = 5
+const val DAILY_REWARD = 30

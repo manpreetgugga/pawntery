@@ -79,6 +79,42 @@ class ProgressTest {
         assertTrue(settings.sound)
     }
 
+    private fun win(level: ComputerLevel = ComputerLevel.NORMAL, hits: Int = 3, tricks: List<String> = emptyList(), ownMess: Float = 20f) =
+        GameSummary(GameKind.VS_COMPUTER, true, level, MatchConfig.FULL_MATCH, 10, hits, tricks, ownMess)
+
+    private fun award(summary: GameSummary): List<Trophy> {
+        settings.recordStats(summary)
+        return Trophies.earned(settings, summary).onEach { settings.grantTrophy(it) }
+    }
+
+    @Test
+    fun trophiesAreEarnedOnceAndPayTheirReward() {
+        val first = award(win(ComputerLevel.CHAMPION, hits = 8, tricks = listOf("Boomerang!", "Triple!"), ownMess = 0f))
+        assertEquals(
+            setOf(Trophy.FIRST_WIN, Trophy.CHAMPION, Trophy.SHARPSHOOTER, Trophy.SPOTLESS, Trophy.BOOMERANG, Trophy.TRIPLE),
+            first.toSet(),
+        )
+        assertEquals(first.sumOf { it.reward }, settings.treats)
+        assertTrue("already earned trophies don't come back", award(win()).isEmpty())
+        assertEquals(listOf(Trophy.HOT_STREAK), award(win()))
+        // A loss resets the streak
+        award(GameSummary(GameKind.VS_COMPUTER, false, ComputerLevel.NORMAL, 10, 10, 1, emptyList(), 60f))
+        assertEquals(0, settings.winStreak)
+        assertEquals(3, settings.bestStreak)
+        assertEquals(1, settings.championWins)
+    }
+
+    @Test
+    fun dailyChallengePaysOncePerDayAndCountsTowardDailyRegular() {
+        assertEquals(DAILY_REWARD, settings.recordDaily(100L, 1))
+        assertEquals("a better score the same day pays nothing more", 0, settings.recordDaily(100L, 3))
+        assertEquals(3, settings.dailyStars(100L))
+        for (day in 101L..104L) settings.recordDaily(day, 2)
+        assertEquals(5, settings.dailiesDone)
+        val summary = GameSummary(GameKind.DAILY, true, null, 7, 3, 2, emptyList(), 0f)
+        assertEquals(listOf(Trophy.DAILY_REGULAR), award(summary))
+    }
+
     @Test
     fun parentGateNeedsTheRightAnswer() {
         val gate = ParentGate(Random(4))

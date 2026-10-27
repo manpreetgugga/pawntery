@@ -66,6 +66,24 @@ class ChallengeTest {
     }
 
     @Test
+    fun dailyChallengesAreFairAndChangeEachDay() {
+        val days = 20300L until 20316L
+        val dailies = days.map { Challenges.daily(it) }
+        assertTrue("different days give different challenges", dailies.map { "${it.player}${it.target}${it.wind}${it.fortPlacements().size}" }.toSet().size > 8)
+        assertEquals("the same day always gives the same challenge", Challenges.daily(20300L).brief, Challenges.daily(20300L).brief)
+        val report = StringBuilder()
+        var beaten = 0
+        for (c in dailies) {
+            assertTrue(c.isDaily)
+            val used = solve(c, 1L)
+            if (used > 0) beaten++
+            report.append("day ${c.day}: ${c.player} vs ${c.target}, wind ${c.wind}, ${c.fortPlacements().size} pieces -> ${if (used < 0) "failed" else "$used throws"}\n")
+        }
+        println(report)
+        assertTrue("most dailies must be beatable:\n$report", beaten >= dailies.size - 1)
+    }
+
+    @Test
     fun starsDependOnThrowsUsed() {
         val c = Challenges.all.first()
         assertEquals(3, c.stars(true, c.threeStars))

@@ -90,6 +90,7 @@ class Match(val config: MatchConfig) : Disposable {
     private val throwsDone = IntArray(2)
     private val throwsThatHit = IntArray(2)
     private val trickShots = IntArray(2)
+    private val trickLog = Array(2) { ArrayList<String>() }
     private var throwHit = false
     private var fragmentHits = 0
     private val inventory = Array(2) { IntArray(ItemType.entries.size) }
@@ -163,6 +164,9 @@ class Match(val config: MatchConfig) : Disposable {
         val c = config.challenge ?: return 0
         return if (phase == Phase.OVER) c.stars(winner == Side.LEFT, throwsDone[Side.LEFT.ordinal]) else 0
     }
+
+    /** The names of the trick shots [side] landed, in order. */
+    fun tricks(side: Side): List<String> = trickLog[side.ordinal]
 
     fun stats(side: Side) = ThrowStats(throwsDone[side.ordinal], throwsThatHit[side.ordinal], trickShots[side.ordinal])
 
@@ -423,7 +427,10 @@ class Match(val config: MatchConfig) : Disposable {
         pet.hitTimer = 0.9f
         val gained = pet.mess - before
         if (item != null && pet.side != turn && gained >= HIT_THRESHOLD) throwHit = true
-        if (trick != null && pet.side != turn) trickShots[turn.ordinal]++
+        if (trick != null && pet.side != turn) {
+            trickShots[turn.ordinal]++
+            trickLog[turn.ordinal].add(trick)
+        }
         events.add(MatchEvent.PetHit(pet.side, gained, x, y, item, trick))
     }
 

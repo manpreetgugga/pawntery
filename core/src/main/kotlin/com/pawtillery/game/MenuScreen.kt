@@ -76,6 +76,8 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         s.identity()
     }
 
+    private fun today(): Long = java.time.LocalDate.now().toEpochDay()
+
     private fun layoutButtons(): List<Button> {
         val cx = uiW / 2f
         if (showHelp) return listOf(Button("help_close", cx - 160f, 70f, 320f, 92f, "Got it!", ButtonStyle.PRIMARY))
@@ -83,13 +85,16 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         return listOf(
             Button("play_ai", cx - 290f, uiH / 2f + 10f, 580f, 100f, "Play vs Computer", ButtonStyle.PRIMARY),
             Button("play_2p", cx - 290f, uiH / 2f - 105f, 580f, 100f, "2 Players · One Phone", ButtonStyle.TEAL),
-            Button("tricks", cx - 290f, uiH / 2f - 220f, 580f, 100f, "Trick Shots", ButtonStyle.GOLD,
+            Button("tricks", cx - 290f, uiH / 2f - 220f, 282f, 100f, "Trick Shots", ButtonStyle.GOLD,
                 sublabel = "${game.settings.totalStars} of ${Challenges.all.size * 3} stars"),
-            Button("mode", cx - 500f, 56f, 300f, 100f, if (easy) "Easy" else "Pro", ButtonStyle.GOLD,
+            Button("daily", cx + 8f, uiH / 2f - 220f, 282f, 100f, "Daily", ButtonStyle.GOLD,
+                sublabel = game.settings.dailyStars(today()).let { if (it > 0) "Done today: $it stars" else "New every day" }),
+            Button("mode", cx - 562f, 56f, 270f, 100f, if (easy) "Easy" else "Pro", ButtonStyle.GOLD,
                 sublabel = if (easy) "Aim guide on, no wind" else "Wind + short aim guide"),
-            Button("settings", cx - 180f, 56f, 210f, 100f, "Settings"),
-            Button("help", cx + 50f, 56f, 230f, 100f, "How to play"),
-            Button("shop", cx + 300f, 56f, 200f, 100f, "Shop", ButtonStyle.TEAL),
+            Button("settings", cx - 276f, 56f, 190f, 100f, "Settings"),
+            Button("help", cx - 70f, 56f, 220f, 100f, "How to play"),
+            Button("trophies", cx + 166f, 56f, 210f, 100f, "Trophies"),
+            Button("shop", cx + 392f, 56f, 170f, 100f, "Shop", ButtonStyle.TEAL),
         )
     }
 
@@ -120,6 +125,8 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             "play_ai" -> game.switchTo(PetSelectScreen(game, twoPlayers = false))
             "play_2p" -> game.switchTo(PetSelectScreen(game, twoPlayers = true))
             "tricks" -> game.switchTo(ChallengeListScreen(game))
+            "daily" -> game.switchTo(GameScreen(game, MatchSetup.forChallenge(Challenges.daily(today()))))
+            "trophies" -> game.switchTo(TrophiesScreen(game))
             "mode" -> game.settings.easyMode = !game.settings.easyMode
             "settings" -> game.switchTo(SettingsScreen(game))
             "help" -> showHelp = true

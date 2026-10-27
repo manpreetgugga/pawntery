@@ -26,6 +26,11 @@ Two neighbors' pets live on either side of a garden fence. First each player **b
 
 Ten single-player puzzle levels. Each gives you a pet and a set of throws against a ready-made fort; mess the target up to the goal within the throw limit. Fewer throws earn up to 3 stars, and every new star is worth 10 treats. Levels open one at a time and teach each item: lobbing over walls, water splash past a roof, smashing a bunker, boomerang from behind, hairball splits, headwinds, carrots in a gale, shells banked off the hedge, and a seed storm. Later levels let you try the pets you haven't unlocked yet. A unit test plays every level with a sharp computer player to prove each one can be beaten.
 
+### Daily challenge and trophies
+
+- **Daily**: a fresh Trick Shot every day, the same for everyone on the same date: a random pet pairing, fort and wind built from the same parts as the hand-made levels (a test plays 16 days of them to make sure they are fair). The first finish each day pays 30 treats.
+- **Trophies**: 14 one-time goals, from *First Splat* to *Champion Slayer*, *Bank Robber*, *Perfectionist* and *Family Night*. Each pays treats and pops up as a card when earned. The Trophies screen also shows lifetime stats: wins, best streak, hit rate, trick shots and more.
+
 ### Pets
 
 | Pet | Signature throw | How to get it |

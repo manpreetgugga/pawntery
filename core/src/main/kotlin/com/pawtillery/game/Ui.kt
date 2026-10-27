@@ -77,6 +77,30 @@ object Ui {
         }
     }
 
+    /** A trophy cup [size] tall centered on (cx, cy); grey when not yet [earned]. */
+    fun trophy(s: ShapeRenderer, cx: Float, cy: Float, size: Float, earned: Boolean) {
+        val k = size / 64f
+        val body = if (earned) Palette.GOLD else Palette.PANEL_EDGE
+        val edge = if (earned) Palette.GOLD_DARK else Palette.BOX_DARK
+        s.color = edge
+        s.rect(cx - 16f * k, cy - 32f * k, 32f * k, 8f * k)
+        s.rect(cx - 5f * k, cy - 24f * k, 10f * k, 14f * k)
+        s.arc(cx - 20f * k, cy + 14f * k, 12f * k, 90f, 180f, 10)
+        s.arc(cx + 20f * k, cy + 14f * k, 12f * k, 270f, 180f, 10)
+        s.color = body
+        s.arc(cx - 20f * k, cy + 14f * k, 6f * k, 90f, 180f, 10)
+        s.arc(cx + 20f * k, cy + 14f * k, 6f * k, 270f, 180f, 10)
+        s.color = edge
+        s.arc(cx, cy + 30f * k, 26f * k, 180f, 180f, 18)
+        s.color = body
+        s.arc(cx, cy + 30f * k, 21f * k, 180f, 180f, 18)
+        s.rect(cx - 21f * k, cy + 26f * k, 42f * k, 6f * k)
+        if (earned) {
+            s.color = Palette.WHITE
+            star(s, cx, cy + 18f * k, 7f * k)
+        }
+    }
+
     fun panel(s: ShapeRenderer, x: Float, y: Float, w: Float, h: Float, fill: Color = Palette.PANEL, edge: Color = Palette.PANEL_EDGE, r: Float = 22f) {
         s.color = edge
         roundRect(s, x, y - 6f, w, h + 6f, r)

@@ -125,7 +125,22 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(90.3f) { tap("reset") }
         at(90.6f) { shot("26-reset-confirm") }
         at(90.7f) { tap("reset_no") }
-        at(91f) { Gdx.app.exit() }
+        at(90.8f) { game.switchTo(MenuScreen(game)) }
+        at(91.4f) { shot("27-menu-after") }
+        at(91.5f) { tap("daily") }
+        at(92.6f) { shot("28-daily") }
+        at(92.7f) { throwComputerShot() }
+        at(96.7f) { throwComputerShot() }
+        at(100.7f) { throwComputerShot() }
+        at(104.7f) { throwComputerShot() }
+        at(108.7f) { throwComputerShot() }
+        at(112.7f) { throwComputerShot() }
+        at(116.7f) { throwComputerShot() }
+        at(121f) { shot("29-daily-result") }
+        at(121.2f) { game.switchTo(MenuScreen(game)) }
+        at(121.8f) { tap("trophies") }
+        at(122.4f) { shot("30-trophies") }
+        at(122.6f) { Gdx.app.exit() }
     }
 
     override fun render() {

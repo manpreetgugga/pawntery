@@ -147,6 +147,13 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         hintTime -= realDt
         shake = max(0f, shake - realDt * 2.5f)
         if (match.phase == Phase.OVER) overTime += realDt
+        if (toasts.isNotEmpty() && overTime > 1.2f) {
+            toastTime += realDt
+            if (toastTime > TOAST_TIME) {
+                toasts.removeFirst()
+                toastTime = 0f
+            }
+        }
     }
 
     private fun updateComputer(dt: Float) {
@@ -231,7 +238,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 if (match.count(e.side, selectedItem[e.side.ordinal]) == 0) selectedItem[e.side.ordinal] = ItemType.MUD
                 val c = challenge
                 if (c != null) {
-                    if (match.stats(Side.LEFT).throws == 0) banner("Level ${c.number}: ${c.title}", c.brief)
+                    if (match.stats(Side.LEFT).throws == 0) banner(if (c.isDaily) c.title else "Level ${c.number}: ${c.title}", c.brief)
                 } else {
                     val who = when {
                         humans.size == 2 -> playerLabel(e.side)
@@ -287,10 +294,49 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     }
 
     private fun giveTreats(winner: Side?) {
+        giveGameTreats(winner)
+        recordStatsAndTrophies(winner)
+    }
+
+    /** Lifetime stats, then any trophies they earned (each pays its own treats). */
+    private fun recordStatsAndTrophies(winner: Side?) {
+        val first = humans.firstOrNull() ?: return
+        val c = challenge
+        val kind = when {
+            c != null && c.isDaily -> GameKind.DAILY
+            c != null -> GameKind.TRICK_SHOT
+            humans.size == 2 -> GameKind.TWO_PLAYERS
+            else -> GameKind.VS_COMPUTER
+        }
+        val summary = GameSummary(
+            kind = kind,
+            won = winner == first && humans.size == 1,
+            level = if (kind == GameKind.VS_COMPUTER) setup.level else null,
+            throwsPerPlayer = match.throwsAllowed(),
+            throws = humans.sumOf { match.stats(it).throws },
+            hits = humans.sumOf { match.stats(it).hits },
+            tricks = humans.flatMap { match.tricks(it) },
+            ownMess = match.pet(first).mess,
+        )
+        val settings = game.settings
+        settings.recordStats(summary)
+        for (t in Trophies.earned(settings, summary)) {
+            settings.grantTrophy(t)
+            toasts.add(t)
+        }
+        unlockable = PetKind.entries.firstOrNull { !settings.isUnlocked(it) && settings.treats >= it.price }
+    }
+
+    /** Trophies earned this game, shown one after another at the top of the screen. */
+    private val toasts = ArrayDeque<Trophy>()
+    private var toastTime = 0f
+
+    private fun giveGameTreats(winner: Side?) {
         val c = challenge
         if (c != null) {
             starsEarned = match.challengeStars()
-            treatsEarned = game.settings.recordChallenge(c.number, starsEarned)
+            val day = c.day
+            treatsEarned = if (day != null) game.settings.recordDaily(day, starsEarned) else game.settings.recordChallenge(c.number, starsEarned)
             return
         }
         if (humans.isEmpty()) return
@@ -303,7 +349,6 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         val tricks = humans.sumOf { match.stats(it).tricks }
         val factor = if (humans.size == 1) setup.level.treatFactor else 1f
         treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, hits, tricks, factor)
-        unlockable = PetKind.entries.firstOrNull { !game.settings.isUnlocked(it) && game.settings.treats >= it.price }
     }
 
     private fun banner(title: String, sub: String) {
@@ -476,7 +521,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     override fun onKey(keycode: Int): Boolean {
         if (keycode != Input.Keys.BACK && keycode != Input.Keys.ESCAPE) return false
         when {
-            match.phase == Phase.OVER -> game.switchTo(if (challenge != null) ChallengeListScreen(game) else MenuScreen(game))
+            match.phase == Phase.OVER -> game.switchTo(if (challenge != null && challenge?.isDaily != true) ChallengeListScreen(game) else MenuScreen(game))
             else -> paused = !paused
         }
         return true
@@ -514,6 +559,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         computerTimer = 0f
         computerBuilding = false
         overTime = 0f
+        toasts.clear()
+        toastTime = 0f
         slowMotion = 0f
         hop.fill(0f)
     }
@@ -573,6 +620,27 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             Ui.buttonLabels(batch, game.assets, buttons, pressedId)
             batch.end()
         }
+        drawToast()
+    }
+
+    /** "Trophy earned" card that slides down from the top after a game. */
+    private fun drawToast() {
+        val t = toasts.firstOrNull() ?: return
+        if (overTime <= 1.2f) return
+        val k = min(1f, min(toastTime, TOAST_TIME - toastTime) * 5f)
+        val w = 680f
+        val h = 96f
+        val x = uiW / 2f - w / 2f
+        val y = uiH - 12f - h * k
+        beginUiShapes()
+        Ui.panel(shapes, x, y, w, h, fill = Palette.GOLD, edge = Palette.GOLD_DARK)
+        Ui.trophy(shapes, x + 56f, y + h / 2f, 64f, true)
+        shapes.end()
+        beginUiText()
+        val a = game.assets
+        Ui.textAt(batch, a.h2, "Trophy: ${t.title}", x + 104f, y + 64f, Palette.INK)
+        Ui.textAt(batch, a.small, "${t.description}  ·  +${t.reward * game.settings.treatMultiplier} treats", x + 104f, y + 28f, Palette.INK, alpha = 0.8f)
+        batch.end()
     }
 
     private fun hopLift(side: Side): Float {
@@ -744,7 +812,11 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             if (overTime > 0.9f && canOfferAd()) {
                 list += Button("double_ad", uiW / 2f + 10f, treatsLineY() - 32f, 360f, 64f, "Watch an ad: double it", ButtonStyle.TEAL, font = game.assets.body)
             }
-            if (overTime > 0.9f && c != null) {
+            if (overTime > 0.9f && c != null && c.isDaily) {
+                val cx = uiW / 2f
+                list += Button("rematch", cx - 330f, uiH / 2f - 290f, 310f, 100f, "Retry", ButtonStyle.LIGHT)
+                list += Button("menu", cx + 20f, uiH / 2f - 290f, 310f, 100f, "Menu", ButtonStyle.PRIMARY)
+            } else if (overTime > 0.9f && c != null) {
                 val cx = uiW / 2f
                 val next = Challenges.byNumber(c.number + 1)
                 val canGoOn = next != null && game.settings.isChallengeOpen(next.number)
@@ -940,10 +1012,11 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 Ui.text(batch, a.small, "Mess ${pet.mess.roundToInt()}%", textX + (w - 146f) / 2f, y + 33f, Palette.INK)
             }
             val wy = uiH - 20f - 90f
+            // Easy mode has no wind in matches, but Trick Shots and dailies can still bring their own.
             val label = when {
-                match.config.easyMode -> "No wind"
-                match.wind == 0f -> "Calm"
-                else -> "Wind ${"%.1f".format(abs(match.wind))}"
+                match.wind != 0f -> "Wind ${"%.1f".format(abs(match.wind))}"
+                match.config.easyMode && challenge == null -> "No wind"
+                else -> "Calm"
             }
             Ui.text(batch, a.small, label, uiW / 2f, wy + (if (match.wind != 0f) 66f else 45f), Palette.INK)
         } else if (isHuman(match.turn) && buildQueue.isEmpty()) {
@@ -1033,7 +1106,12 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         val c = challenge
         if (c != null) {
             val won = match.winner == Side.LEFT
-            Ui.text(batch, a.title, if (won) "Level complete!" else "Out of throws", cx, uiH / 2f + 250f, Palette.WHITE, maxWidth = 800f)
+            val title = when {
+                !won -> "Out of throws"
+                c.isDaily -> "Daily done!"
+                else -> "Level complete!"
+            }
+            Ui.text(batch, a.title, title, cx, uiH / 2f + 250f, Palette.WHITE, maxWidth = 800f)
             val st = match.stats(Side.LEFT)
             val line = if (won) {
                 "${petName(Side.RIGHT)} reached ${match.pet(Side.RIGHT).mess.roundToInt()}% in ${st.throws} throws"
@@ -1128,6 +1206,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         const val AIM_PANEL_W = 430f
         const val AIM_PANEL_H = 150f
         const val AIM_PANEL_Y = 18f
+        const val TOAST_TIME = 2.8f
         val NUDGE_IDS = setOf("angle-", "angle+", "power-", "power+")
         val HIT_WORDS = listOf("Splat!", "Gotcha!", "Bullseye!", "Yuck!", "Messy!")
     }
