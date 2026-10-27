@@ -39,6 +39,20 @@ object Palette {
     val CAT_LIGHT = c("FBE3C4")
     val CAT_EYE = c("8BCF4F")
 
+    val BUNNY_FUR = c("F4F1EC")
+    val BUNNY_SHADE = c("CFC8BE")
+    val TURTLE_SKIN = c("9CCC65")
+    val TURTLE_SHELL = c("5E9A3A")
+    val TURTLE_SHELL_DARK = c("3F6E25")
+    val TURTLE_SPOT = c("8BC34A")
+    val PARROT_RED = c("E53935")
+    val PARROT_GREEN = c("43A047")
+    val PARROT_BLUE = c("1E88E5")
+    val BEAK = c("F9C23C")
+    val CARROT = c("F57C00")
+    val SEED = c("E2C27D")
+    val SEED_DARK = c("A9864A")
+
     val MUD = c("6B4423")
     val MUD_DARK = c("4A2E16")
     val WATER = c("4FC3F7")
@@ -239,6 +253,9 @@ object Art {
         when (kind) {
             PetKind.DOG -> dog(s, t, hit, blink, breathe)
             PetKind.CAT -> cat(s, t, hit, blink, breathe)
+            PetKind.BUNNY -> bunny(s, t, hit, blink, breathe)
+            PetKind.TURTLE -> turtle(s, t, hit, blink, breathe)
+            PetKind.PARROT -> parrot(s, t, hit, blink, breathe)
         }
         if (mess > 60f && !hit) {
             // Grumpy brows once things get messy.
@@ -327,6 +344,120 @@ object Art {
         s.color = Palette.INK
         s.rectLine(0.44f, hy - 0.14f, 0.68f, hy - 0.08f, 0.015f)
         s.rectLine(0.44f, hy - 0.16f, 0.68f, hy - 0.2f, 0.015f)
+    }
+
+    /** The color that stands for each pet on panels and cards. */
+    fun petColor(kind: PetKind): Color = when (kind) {
+        PetKind.DOG -> Palette.TEAL
+        PetKind.CAT -> Palette.ACCENT
+        PetKind.BUNNY -> Palette.PINK
+        PetKind.TURTLE -> Palette.GOLD
+        PetKind.PARROT -> Palette.PARROT_BLUE
+    }
+
+    private fun bunny(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
+        val hy = 0.12f + breathe
+        val wiggle = MathUtils.sin(t * 2.5f) * 5f
+        s.color = Palette.WHITE
+        s.circle(-0.5f, -0.3f, 0.13f, 14)
+        s.color = Palette.BUNNY_FUR
+        s.ellipse(-0.52f, -0.6f, 0.86f, 0.62f + breathe, 24)
+        s.color = Palette.BUNNY_SHADE
+        s.ellipse(-0.47f, -0.62f, 0.44f, 0.17f, 14)
+        s.color = Palette.BUNNY_FUR
+        s.ellipse(0.08f, -0.62f, 0.18f, 0.14f, 10)
+        s.ellipse(0.24f, -0.62f, 0.18f, 0.14f, 10)
+        // Ears
+        s.ellipse(-0.08f, hy + 0.1f, 0.17f, 0.6f, 14f + wiggle, 16)
+        s.ellipse(0.12f, hy + 0.14f, 0.17f, 0.62f, -4f + wiggle, 16)
+        s.color = Palette.PINK
+        s.ellipse(-0.05f, hy + 0.2f, 0.09f, 0.42f, 14f + wiggle, 12)
+        s.ellipse(0.15f, hy + 0.24f, 0.09f, 0.44f, -4f + wiggle, 12)
+        s.color = Palette.BUNNY_FUR
+        s.circle(0.2f, hy, 0.3f, 28)
+        s.color = Palette.WHITE
+        s.ellipse(0.28f, hy - 0.22f, 0.26f, 0.18f, 16)
+        s.color = Palette.PINK
+        s.circle(0.5f, hy - 0.08f, 0.05f, 10)
+        if (hit) {
+            s.color = Palette.WHITE
+            s.rect(0.4f, hy - 0.26f, 0.08f, 0.08f)
+            s.color = Palette.INK
+            s.rect(0.437f, hy - 0.26f, 0.006f, 0.08f)
+        }
+        eye(s, 0.3f, hy + 0.06f, 0.07f, hit, blink, Palette.INK)
+        s.color = Palette.INK
+        s.rectLine(0.46f, hy - 0.12f, 0.68f, hy - 0.06f, 0.012f)
+        s.rectLine(0.46f, hy - 0.14f, 0.68f, hy - 0.18f, 0.012f)
+    }
+
+    private fun turtle(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
+        val bob = MathUtils.sin(t * 2f) * 0.02f
+        s.color = Palette.TURTLE_SKIN
+        s.ellipse(-0.44f, -0.62f, 0.28f, 0.2f, 12)
+        s.ellipse(0.16f, -0.62f, 0.28f, 0.2f, 12)
+        s.triangle(-0.5f, -0.36f, -0.5f, -0.46f, -0.68f, -0.44f)
+        // Neck and head
+        s.rectLine(0.22f, -0.3f, 0.4f, -0.02f + bob, 0.2f)
+        s.circle(0.44f, 0.02f + bob, 0.21f, 22)
+        if (hit) {
+            s.color = Palette.MOUTH
+            s.ellipse(0.5f, -0.1f + bob, 0.12f, 0.07f, 10)
+        } else {
+            s.color = Palette.INK
+            s.rectLine(0.5f, -0.07f + bob, 0.62f, -0.05f + bob, 0.02f)
+        }
+        eye(s, 0.5f, 0.07f + bob, 0.06f, hit, blink, Palette.INK)
+        // Shell: a half-dome stretched upward, with spots and a rim.
+        s.color = Palette.TURTLE_SHELL_DARK
+        domeShape(s, -0.06f, -0.42f, 0.54f, 1.85f + breathe)
+        s.color = Palette.TURTLE_SHELL
+        domeShape(s, -0.06f, -0.42f, 0.49f, 1.85f + breathe)
+        s.color = Palette.TURTLE_SPOT
+        s.circle(-0.06f, 0.12f, 0.15f, 16)
+        s.circle(-0.3f, -0.12f, 0.12f, 14)
+        s.circle(0.18f, -0.12f, 0.12f, 14)
+        s.circle(-0.06f, -0.28f, 0.1f, 12)
+        s.color = Palette.TURTLE_SHELL_DARK
+        s.rect(-0.62f, -0.48f, 1.12f, 0.1f)
+    }
+
+    private fun domeShape(s: ShapeRenderer, cx: Float, cy: Float, r: Float, stretch: Float) {
+        s.translate(cx, cy, 0f)
+        s.scale(1f, stretch, 1f)
+        s.arc(0f, 0f, r, 0f, 180f, 24)
+        s.scale(1f, 1f / stretch, 1f)
+        s.translate(-cx, -cy, 0f)
+    }
+
+    private fun parrot(s: ShapeRenderer, t: Float, hit: Boolean, blink: Boolean, breathe: Float) {
+        val flap = MathUtils.sin(t * 6f) * 4f
+        s.color = Palette.PARROT_BLUE
+        s.rectLine(-0.25f, -0.25f, -0.6f, -0.58f, 0.13f)
+        s.color = Palette.PARROT_GREEN
+        s.rectLine(-0.2f, -0.3f, -0.48f, -0.62f, 0.11f)
+        s.color = Palette.HUB
+        s.rect(-0.08f, -0.6f, 0.06f, 0.14f)
+        s.rect(0.08f, -0.6f, 0.06f, 0.14f)
+        s.color = Palette.PARROT_RED
+        s.ellipse(-0.34f, -0.52f, 0.64f, 0.86f + breathe, 24)
+        s.color = Palette.PARROT_GREEN
+        s.ellipse(-0.34f, -0.36f, 0.4f, 0.6f, 12f + flap, 16)
+        s.color = Palette.PARROT_BLUE
+        s.ellipse(-0.34f, -0.4f, 0.22f, 0.3f, 12f + flap, 12)
+        val hy = 0.3f + breathe
+        s.color = Palette.PARROT_RED
+        s.triangle(-0.02f, hy + 0.15f, 0.06f, hy + 0.36f, 0.14f, hy + 0.2f)
+        s.triangle(0.1f, hy + 0.2f, 0.2f, hy + 0.38f, 0.26f, hy + 0.18f)
+        s.circle(0.12f, hy, 0.27f, 26)
+        s.color = Palette.WHITE
+        s.ellipse(0.14f, hy - 0.1f, 0.22f, 0.26f, 16)
+        eye(s, 0.24f, hy + 0.04f, 0.065f, hit, blink, Palette.INK)
+        s.color = Palette.BEAK
+        s.triangle(0.33f, hy + 0.06f, 0.33f, hy - 0.12f, 0.56f, hy - 0.06f)
+        s.color = Palette.INK
+        if (hit) s.triangle(0.33f, hy - 0.14f, 0.33f, hy - 0.24f, 0.48f, hy - 0.2f)
+        else s.triangle(0.33f, hy - 0.08f, 0.33f, hy - 0.16f, 0.46f, hy - 0.1f)
     }
 
     private fun eye(s: ShapeRenderer, x: Float, y: Float, r: Float, hit: Boolean, blink: Boolean, pupil: Color) {
@@ -497,9 +628,18 @@ object Art {
         val b = p.body
         s.identity()
         s.translate(b.position.x, b.position.y, 0f)
-        s.rotate(0f, 0f, 1f, b.angle * MathUtils.radiansToDegrees)
-        itemShape(s, p.item, p.radius)
+        // A carrot points where it is going; everything else spins with its body.
+        val angle = if (p.item == ItemType.CARROT) MathUtils.atan2(b.linearVelocity.y, b.linearVelocity.x) else b.angle
+        s.rotate(0f, 0f, 1f, angle * MathUtils.radiansToDegrees)
+        if (p.fragment && p.item == ItemType.SEEDS) seed(s, p.radius) else itemShape(s, p.item, p.radius)
         s.identity()
+    }
+
+    private fun seed(s: ShapeRenderer, r: Float) {
+        s.color = Palette.SEED_DARK
+        s.ellipse(-r * 1.1f, -r * 0.75f, r * 2.2f, r * 1.5f, 18)
+        s.color = Palette.SEED
+        s.ellipse(-r * 0.95f, -r * 0.6f, r * 1.9f, r * 1.2f, 18)
     }
 
     fun itemShape(s: ShapeRenderer, item: ItemType, r: Float) {
@@ -537,6 +677,38 @@ object Art {
                 s.rect(-0.33f * k, -0.06f * k, 0.66f * k, 0.12f * k)
                 for (sx in floatArrayOf(-0.33f, 0.33f)) for (sy in floatArrayOf(-0.08f, 0.08f)) s.circle(sx * k, sy * k, 0.085f * k, 12)
             }
+            ItemType.CARROT -> {
+                val k = r / ItemType.CARROT.radius
+                s.color = Palette.LEAF
+                s.triangle(-0.2f * k, 0f, -0.42f * k, 0.14f * k, -0.38f * k, 0.02f * k)
+                s.triangle(-0.2f * k, 0f, -0.42f * k, -0.14f * k, -0.38f * k, -0.02f * k)
+                s.triangle(-0.2f * k, 0f, -0.46f * k, 0.04f * k, -0.46f * k, -0.04f * k)
+                s.color = Palette.CARROT
+                s.triangle(0.36f * k, 0f, -0.22f * k, 0.13f * k, -0.22f * k, -0.13f * k)
+                s.color = Palette.ACCENT_DARK
+                s.rectLine(-0.1f * k, 0.06f * k, -0.04f * k, 0.02f * k, 0.02f * k)
+                s.rectLine(0.06f * k, -0.05f * k, 0.12f * k, -0.02f * k, 0.02f * k)
+            }
+            ItemType.SHELL -> {
+                s.color = Palette.TURTLE_SHELL_DARK; s.circle(0f, 0f, r, 22)
+                s.color = Palette.TURTLE_SHELL; s.circle(0f, 0f, r * 0.86f, 22)
+                s.color = Palette.TURTLE_SPOT
+                s.circle(0f, 0f, r * 0.3f, 12)
+                for (i in 0 until 6) {
+                    val a = i * 60f
+                    s.circle(MathUtils.cosDeg(a) * r * 0.58f, MathUtils.sinDeg(a) * r * 0.58f, r * 0.17f, 10)
+                }
+            }
+            ItemType.SEEDS -> {
+                s.color = Palette.SEED_DARK; s.circle(0f, 0f, r, 20)
+                s.color = Palette.SEED; s.circle(0f, 0f, r * 0.86f, 20)
+                s.color = Palette.SEED_DARK
+                for (i in 0 until 7) {
+                    val a = i * 51f + 10f
+                    val d = if (i % 2 == 0) r * 0.5f else r * 0.2f
+                    s.ellipse(MathUtils.cosDeg(a) * d - r * 0.12f, MathUtils.sinDeg(a) * d - r * 0.07f, r * 0.24f, r * 0.14f, a, 8)
+                }
+            }
             ItemType.HAIRBALL -> {
                 s.color = Palette.HAIR_DARK
                 for (i in 0 until 9) {
@@ -563,6 +735,9 @@ object Art {
         ItemType.BOWLING -> Palette.BOWLING
         ItemType.BONE -> Palette.GRAVY
         ItemType.HAIRBALL -> Palette.HAIR
+        ItemType.CARROT -> Palette.CARROT
+        ItemType.SHELL -> Palette.TURTLE_SHELL
+        ItemType.SEEDS -> Palette.SEED
     }
 
     /** A blob with a few droplets, shaped by the decal's seed so each splat looks different. */

@@ -87,11 +87,16 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     protected fun clear() {
         Gdx.gl.glClearColor(Palette.SKY_BOTTOM.r, Palette.SKY_BOTTOM.g, Palette.SKY_BOTTOM.b, 1f)
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
+    }
+
+    /** SpriteBatch.end() switches blending off, so every shape pass switches it back on. */
+    private fun enableBlending() {
         Gdx.gl.glEnable(GL20.GL_BLEND)
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
     }
 
     protected fun beginWorld() {
+        enableBlending()
         worldView.apply()
         shapes.projectionMatrix = worldCam.combined
         shapes.identity()
@@ -99,6 +104,7 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
     }
 
     protected fun beginUiShapes() {
+        enableBlending()
         uiView.apply()
         shapes.projectionMatrix = uiCam.combined
         shapes.identity()

@@ -12,8 +12,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-/** One match: Dog vs Cat, against the computer or two players sharing the phone. */
-class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen(game) {
+/** One match: against the computer, two players sharing the phone, or (for demos) computer vs computer. */
+class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(game) {
 
     private class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val maxLife: Float, val size: Float, val color: Color)
 
@@ -51,21 +51,27 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
     private var hintTime = 0f
     private var shake = 0f
     private var overTime = 0f
+    private var directHits = 0
+    private var treatsEarned = 0
+    private var unlockable: PetKind? = null
+    private val humans = Side.entries.filter { it !in setup.computer }
 
     private val obstacles = ArrayList<Rectangle>()
     private val tmp = Vector2()
     private val tmp2 = Vector2()
     private val tmpColor = Color()
 
-    private fun newMatch() = Match(MatchConfig(easyMode = game.settings.easyMode))
+    private fun newMatch() = Match(
+        MatchConfig(easyMode = game.settings.easyMode, leftKind = setup.left, rightKind = setup.right, throwsPerPlayer = setup.throwsPerPlayer),
+    )
 
-    private fun isHuman(side: Side) = twoPlayers || side == Side.LEFT
+    private fun isHuman(side: Side) = side !in setup.computer
 
     private fun petName(side: Side) = match.pet(side).kind.displayName
 
     private fun playerLabel(side: Side) = when {
-        twoPlayers -> "Player ${side.ordinal + 1}"
-        side == Side.LEFT -> "You"
+        humans.size == 2 -> "Player ${side.ordinal + 1}"
+        isHuman(side) -> "You"
         else -> "Computer"
     }
 
@@ -137,8 +143,8 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 }
             }
             Phase.FLIGHT -> {
-                val hairball = match.activeHairball
-                if (computerPlan?.splitAtApex == true && hairball != null && hairball.body.linearVelocity.y < 0f) match.splitHairball()
+                val splitter = match.activeSplitter
+                if (computerPlan?.splitAtApex == true && splitter != null && splitter.body.linearVelocity.y < 0f) match.splitActive()
             }
             else -> Unit
         }
@@ -158,7 +164,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 selectedPiece = PieceType.CRATE
                 rotated = false
                 if (isHuman(e.side)) {
-                    banner(if (twoPlayers) "${playerLabel(e.side)}: build!" else "Build your fort!", "Protect your ${petName(e.side)} with up to ${Arena.PIECES_PER_PLAYER} pieces")
+                    banner(if (humans.size == 2) "${playerLabel(e.side)}: build!" else "Build your fort!", "Protect your ${petName(e.side)} with up to ${Arena.PIECES_PER_PLAYER} pieces")
                 } else {
                     banner("Computer is building", "Watch where the walls go")
                 }
@@ -170,7 +176,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 aiming = false
                 if (match.count(e.side, selectedItem[e.side.ordinal]) == 0) selectedItem[e.side.ordinal] = ItemType.MUD
                 val who = when {
-                    twoPlayers -> playerLabel(e.side)
+                    humans.size == 2 -> playerLabel(e.side)
                     isHuman(e.side) -> "Your throw"
                     else -> "Computer's throw"
                 }
@@ -195,9 +201,10 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
             }
             is MatchEvent.PetHit -> {
                 val amount = e.amount.roundToInt()
+                if (e.item != null && amount >= 5 && !isHuman(e.side)) directHits++
                 game.sfx("bonk", 0.9f, 0.9f + MathUtils.random(0.25f))
                 game.buzz(if (amount >= 12) 60 else 25)
-                popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
+                if (amount >= 2) popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
                 if (amount >= 14) popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true))
                 if (e.item == null && amount >= 3) popups.add(Popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true))
                 shake = max(shake, 0.25f)
@@ -210,8 +217,20 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
             is MatchEvent.GameOver -> {
                 game.sfx("win")
                 overTime = 0f
+                giveTreats(e.winner)
             }
         }
+    }
+
+    private fun giveTreats(winner: Side?) {
+        if (humans.isEmpty()) return
+        val result = when {
+            humans.size == 2 || winner == null -> GameResult.DRAW
+            winner in humans -> GameResult.WIN
+            else -> GameResult.LOSS
+        }
+        treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, directHits)
+        unlockable = PetKind.entries.firstOrNull { !game.settings.isUnlocked(it) && game.settings.treats >= it.price }
     }
 
     private fun banner(title: String, sub: String) {
@@ -265,7 +284,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
                 aimStart.set(ui)
                 setAim(0f, 0f)
             }
-            Phase.FLIGHT -> if (isHuman(side) && match.activeHairball != null) match.splitHairball()
+            Phase.FLIGHT -> if (isHuman(side) && match.activeSplitter != null) match.splitActive()
             else -> Unit
         }
     }
@@ -310,6 +329,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
             id == "resume" -> paused = false
             id == "restart" || id == "rematch" -> restart()
             id == "menu" -> game.switchTo(MenuScreen(game))
+            id == "pets" -> game.switchTo(PetSelectScreen(game, twoPlayers = humans.size == 2))
             id.startsWith("piece:") -> selectedPiece = PieceType.valueOf(id.removePrefix("piece:"))
             id == "rotate" -> rotated = !rotated
             id == "undo" -> match.undoPiece()
@@ -347,6 +367,9 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         match.dispose()
         match = newMatch()
         computer = ComputerPlayer(Random(System.nanoTime()), game.settings.easyMode)
+        directHits = 0
+        treatsEarned = 0
+        unlockable = null
         particles.clear()
         popups.clear()
         buildQueue.clear()
@@ -566,8 +589,9 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         if (match.phase == Phase.OVER) {
             if (overTime > 0.9f) {
                 val cx = uiW / 2f
-                list += Button("rematch", cx - 330f, uiH / 2f - 250f, 320f, 100f, "Rematch", ButtonStyle.PRIMARY)
-                list += Button("menu", cx + 10f, uiH / 2f - 250f, 320f, 100f, "Menu")
+                list += Button("rematch", cx - 390f, uiH / 2f - 270f, 290f, 100f, "Rematch", ButtonStyle.PRIMARY)
+                list += Button("pets", cx - 80f, uiH / 2f - 270f, 230f, 100f, "Pets", ButtonStyle.TEAL)
+                list += Button("menu", cx + 170f, uiH / 2f - 270f, 220f, 100f, "Menu")
             }
             return list
         }
@@ -692,7 +716,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         Ui.panel(s, x, y, w, h)
         val pet = match.pet(side)
         val iconX = if (side == Side.LEFT) x + 62f else x + w - 62f
-        s.color = if (side == Side.LEFT) Palette.TEAL else Palette.ACCENT
+        s.color = Art.petColor(pet.kind)
         s.circle(iconX, y + h / 2f, 44f, 30)
         icon(iconX - side.dir * 4f, y + h / 2f - 26f, 72f) {
             s.scale(side.dir, 1f, 1f)
@@ -764,7 +788,7 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         if (match.phase != Phase.BUILD && tip != null) {
             Ui.text(batch, a.small, tip, uiW / 2f, TIP_Y, Palette.WHITE, if (hintTime > 0f) min(1f, hintTime * 3f) else 1f, 770f)
         }
-        if (match.phase == Phase.FLIGHT && isHuman(side) && match.activeHairball != null) {
+        if (match.phase == Phase.FLIGHT && isHuman(side) && match.activeSplitter != null) {
             Ui.text(batch, a.label, "Tap to split!", uiW / 2f, uiH * 0.5f, Palette.WHITE)
         }
         if (aiming && match.phase == Phase.AIM && aimPower >= 0.02f) {
@@ -818,8 +842,8 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         val winner = match.winner
         val title = when {
             winner == null -> "It's a draw!"
-            twoPlayers -> "${petName(winner)} wins!"
-            winner == Side.LEFT -> "You win!"
+            humans.size != 1 -> "${petName(winner)} wins!"
+            isHuman(winner) -> "You win!"
             else -> "Computer wins!"
         }
         Ui.text(batch, a.title, title, cx, uiH / 2f + 230f, Palette.WHITE)
@@ -827,12 +851,17 @@ class GameScreen(game: Pawtillery, private val twoPlayers: Boolean) : BaseScreen
         val why = when {
             loser != null && match.pet(loser).mess >= Arena.MESS_TO_LOSE -> "${petName(loser)} is 100% messy!"
             winner == null -> "Exactly as messy as each other"
-            else -> "Least messy after ${Arena.THROWS_PER_PLAYER} throws each"
+            else -> "Least messy after ${match.config.throwsPerPlayer} throws each"
         }
-        Ui.text(batch, a.h2, why, cx, uiH / 2f - 60f, Palette.INK)
+        Ui.text(batch, a.h2, why, cx, uiH / 2f - 40f, Palette.INK)
         val l = match.pet(Side.LEFT)
         val r = match.pet(Side.RIGHT)
-        Ui.text(batch, a.body, "${l.kind.displayName} mess ${l.mess.roundToInt()}%     ${r.kind.displayName} mess ${r.mess.roundToInt()}%", cx, uiH / 2f - 112f, Palette.INK, 0.8f)
+        Ui.text(batch, a.body, "${l.kind.displayName} mess ${l.mess.roundToInt()}%     ${r.kind.displayName} mess ${r.mess.roundToInt()}%", cx, uiH / 2f - 86f, Palette.INK, 0.8f)
+        if (treatsEarned > 0) {
+            val next = unlockable
+            val line = if (next != null) "+$treatsEarned treats! You can unlock ${next.displayName} now" else "+$treatsEarned treats"
+            Ui.text(batch, a.h2, line, cx, uiH / 2f - 140f, Palette.ACCENT_DARK, maxWidth = 780f)
+        }
     }
 
     private companion object {

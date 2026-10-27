@@ -10,9 +10,13 @@ enum class Side(val dir: Float) {
     val other: Side get() = if (this == LEFT) RIGHT else LEFT
 }
 
-enum class PetKind(val displayName: String, val signature: ItemType) {
-    DOG("Dog", ItemType.BONE),
-    CAT("Cat", ItemType.HAIRBALL),
+/** [price] is in treats; 0 means free from the start. */
+enum class PetKind(val displayName: String, val signature: ItemType, val price: Int) {
+    DOG("Dog", ItemType.BONE, 0),
+    CAT("Cat", ItemType.HAIRBALL, 0),
+    BUNNY("Bunny", ItemType.CARROT, 60),
+    TURTLE("Turtle", ItemType.SHELL, 120),
+    PARROT("Parrot", ItemType.SEEDS, 180),
 }
 
 /**
@@ -30,13 +34,22 @@ enum class ItemType(
     /** Boomerang pull back toward the thrower, in m/s². */
     val returnAccel: Float = 0f,
     val restitution: Float = 0.1f,
+    /** Tapping during flight splits it into this many pieces (0 = no split). */
+    val splitCount: Int = 0,
+    /** Angle between split pieces, in degrees. */
+    val splitSpread: Float = 0f,
+    val fragmentRadius: Float = 0f,
+    val fragmentMess: Float = 0f,
     val hint: String,
 ) {
     MUD("Mud Ball", 0.32f, 2f, 15f, -1, true, hint = "Always ready. Splats on contact."),
     WATER("Water Balloon", 0.4f, 1f, 24f, 2, true, hint = "Bursts and soaks everything nearby, even behind walls."),
     BOWLING("Bowling Ball", 0.42f, 8f, 8f, 2, false, restitution = 0.05f, hint = "Heavy. Smashes forts apart."),
     BONE("Boomerang Bone", 0.3f, 1.5f, 18f, 2, true, gravityScale = 0.45f, returnAccel = 3.5f, hint = "Glides out and curves back. Hit them from behind!"),
-    HAIRBALL("Hairball", 0.35f, 1.5f, 14f, 2, true, hint = "Tap while it flies to split it into three."),
+    HAIRBALL("Hairball", 0.35f, 1.5f, 14f, 2, true, splitCount = 3, splitSpread = 11f, fragmentRadius = 0.25f, fragmentMess = 10f, hint = "Tap while it flies to split it into three."),
+    CARROT("Carrot Rocket", 0.28f, 1.6f, 17f, 2, true, gravityScale = 0.3f, hint = "Flies fast and almost straight. Great for sneaky gaps."),
+    SHELL("Shell Slide", 0.45f, 5f, 12f, 2, false, restitution = 0.45f, hint = "Bounces and rolls right through forts."),
+    SEEDS("Seed Shower", 0.34f, 1.5f, 12f, 2, true, splitCount = 5, splitSpread = 13f, fragmentRadius = 0.19f, fragmentMess = 7f, hint = "Tap while it flies to scatter five seeds."),
 }
 
 enum class PieceShape { BOX, TRAPEZOID, CIRCLE }
@@ -76,7 +89,6 @@ object Arena {
     const val LAUNCH_HEIGHT = 2.7f
     const val MAX_SPEED = 19f
     const val PIECES_PER_PLAYER = 6
-    const val THROWS_PER_PLAYER = 10
     const val MESS_TO_LOSE = 100f
     const val MAX_BUILD_HEIGHT = 12f
     const val STEP = 1f / 60f
@@ -137,11 +149,6 @@ class Projectile(val item: ItemType, val side: Side, val body: Body, val fragmen
     var dead = false
     var scoredPet = false
 
-    val radius: Float get() = if (fragment) FRAGMENT_RADIUS else item.radius
-    val mess: Float get() = if (fragment) FRAGMENT_MESS else item.mess
-
-    companion object {
-        const val FRAGMENT_RADIUS = 0.25f
-        const val FRAGMENT_MESS = 10f
-    }
+    val radius: Float get() = if (fragment) item.fragmentRadius else item.radius
+    val mess: Float get() = if (fragment) item.fragmentMess else item.mess
 }

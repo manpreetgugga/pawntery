@@ -82,9 +82,10 @@ class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
             }
         } else {
             val bowling = if (ItemType.BOWLING in available) search(match, side, ItemType.BOWLING, target, blockers) else null
-            val bone = if (signature == ItemType.BONE && signature in available) search(match, side, signature, target, blockers) else null
+            // Some signatures find a way around walls (the bone from behind, the carrot through gaps).
+            val sig = if (signature in available) search(match, side, signature, target, blockers) else null
             when {
-                bone != null && bone.stop == Stop.PET -> { item = signature; best = bone }
+                sig != null && sig.stop == Stop.PET -> { item = signature; best = sig }
                 bowling != null && rng.nextFloat() < 0.75f -> { item = ItemType.BOWLING; best = bowling }
                 ItemType.WATER in available -> { item = ItemType.WATER; best = search(match, side, ItemType.WATER, target, blockers) }
             }
@@ -96,7 +97,7 @@ class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
             item,
             side.dir * MathUtils.cosDeg(angle) * speed,
             MathUtils.sinDeg(angle) * speed,
-            splitAtApex = item == ItemType.HAIRBALL && rng.nextFloat() < 0.75f,
+            splitAtApex = item.splitCount > 0 && rng.nextFloat() < 0.75f,
         )
     }
 
@@ -132,7 +133,8 @@ class ComputerPlayer(private val rng: Random, private val easy: Boolean) {
         var score = when (r.stop) {
             // Among hits, prefer throws that still hit with this player's usual aiming error.
             Stop.PET -> -robustness(match, side, item, target, blockers, angle, speed)
-            Stop.PIECE -> if (item == ItemType.BOWLING) 0.5f * dist else 3f + dist
+            // Heavy rollers (bowling ball, shell) are worth throwing at the fort itself.
+            Stop.PIECE -> if (!item.splatsOnContact) 0.5f * dist else 3f + dist
             else -> 3f + dist
         }
         if (item == ItemType.WATER && r.stop != Stop.PET) score = maxOf(0f, dist - 1.2f)

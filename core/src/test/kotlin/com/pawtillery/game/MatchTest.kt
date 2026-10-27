@@ -21,7 +21,8 @@ class MatchTest {
 
     private val matches = ArrayList<Match>()
 
-    private fun newMatch(easy: Boolean = true, seed: Long = 1L) = Match(MatchConfig(easyMode = easy, seed = seed)).also { matches.add(it) }
+    private fun newMatch(easy: Boolean = true, seed: Long = 1L, left: PetKind = PetKind.DOG, right: PetKind = PetKind.CAT, throws: Int = MatchConfig.FULL_MATCH) =
+        Match(MatchConfig(easyMode = easy, leftKind = left, rightKind = right, throwsPerPlayer = throws, seed = seed)).also { matches.add(it) }
 
     @After
     fun tearDown() = matches.forEach { it.dispose() }
@@ -98,7 +99,7 @@ class MatchTest {
         assertEquals(1, m.count(Side.LEFT, ItemType.WATER))
         m.runUntil { phase == Phase.AIM }
         assertEquals(Side.RIGHT, m.turn)
-        assertEquals(Arena.THROWS_PER_PLAYER - 1, m.throwsLeft(Side.LEFT))
+        assertEquals(MatchConfig.FULL_MATCH - 1, m.throwsLeft(Side.LEFT))
         // Cat cannot throw the dog's bone.
         assertFalse(m.canThrow(ItemType.BONE))
         assertTrue(m.canThrow(ItemType.HAIRBALL))
@@ -129,10 +130,46 @@ class MatchTest {
         m.runUntil { phase == Phase.AIM }
         assertTrue(m.throwItem(ItemType.HAIRBALL, -8f, 12f))
         repeat(20) { m.step() }
-        assertTrue(m.splitHairball())
+        assertTrue(m.splitActive())
         assertEquals(3, m.projectiles.size)
         assertTrue(m.projectiles.all { it.fragment })
-        assertFalse(m.splitHairball())
+        assertFalse(m.splitActive())
+    }
+
+    @Test
+    fun seedShowerScattersFiveSeeds() {
+        val m = newMatch(left = PetKind.PARROT)
+        m.skipBuild()
+        assertTrue(m.throwItem(ItemType.SEEDS, 8f, 12f))
+        repeat(20) { m.step() }
+        assertTrue(m.splitActive())
+        assertEquals(5, m.projectiles.size)
+        assertTrue(m.projectiles.all { it.fragment && it.mess == ItemType.SEEDS.fragmentMess })
+    }
+
+    @Test
+    fun quickMatchesEndAfterFiveThrowsEach() {
+        val m = newMatch(throws = MatchConfig.QUICK_MATCH)
+        m.skipBuild()
+        var throws = 0
+        while (m.phase != Phase.OVER) {
+            assertTrue(m.throwItem(ItemType.MUD, m.turn.dir * 2f, 2f))
+            throws++
+            m.runUntil { phase == Phase.AIM || phase == Phase.OVER }
+        }
+        assertEquals(2 * MatchConfig.QUICK_MATCH, throws)
+        assertNull("no one got messy, so it's a draw", m.winner)
+    }
+
+    @Test
+    fun everyPetCanThrowItsSignature() {
+        for (kind in PetKind.entries) {
+            val m = newMatch(left = kind)
+            m.skipBuild()
+            assertTrue("${kind.name} throws ${kind.signature}", m.throwItem(kind.signature, 8f, 10f))
+            m.runUntil { phase == Phase.AIM }
+            assertEquals(1, m.count(Side.LEFT, kind.signature))
+        }
     }
 
     @Test
@@ -147,8 +184,9 @@ class MatchTest {
 
     @Test
     fun computerVsComputerMatchesFinish() {
-        for (seed in 1L..4L) {
-            val m = newMatch(easy = seed % 2 == 0L, seed = seed)
+        for (seed in 1L..5L) {
+            val pets = PetKind.entries
+            val m = newMatch(easy = seed % 2 == 0L, seed = seed, left = pets[seed.toInt() % pets.size], right = pets[(seed.toInt() + 2) % pets.size])
             val ai = ComputerPlayer(Random(seed), easy = m.config.easyMode)
             for (side in Side.entries) {
                 ai.planBuild(side).forEach { assertTrue(m.placePiece(it.type, it.rotated, it.x)) }
@@ -156,13 +194,13 @@ class MatchTest {
                 m.finishBuild()
             }
             var throws = 0
-            while (m.phase != Phase.OVER && throws < 2 * Arena.THROWS_PER_PLAYER + 1) {
+            while (m.phase != Phase.OVER && throws < 2 * m.config.throwsPerPlayer + 1) {
                 assertEquals(Phase.AIM, m.phase)
                 val plan = ai.planShot(m, m.turn)
                 assertTrue(m.throwItem(plan.item, plan.vx, plan.vy))
                 throws++
                 m.runUntil {
-                    if (plan.splitAtApex && activeHairball != null && activeHairball!!.body.linearVelocity.y < 0f) splitHairball()
+                    if (plan.splitAtApex && activeSplitter != null && activeSplitter!!.body.linearVelocity.y < 0f) splitActive()
                     phase == Phase.AIM || phase == Phase.OVER
                 }
             }

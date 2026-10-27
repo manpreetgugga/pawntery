@@ -43,7 +43,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             s.color = Palette.SHADE
             Ui.roundRect(s, uiW / 2f - 330f, uiH - 268f, 660f, 58f, 29f)
         }
-        if (showHelp) drawHelpPanel()
+        if (showHelp) drawHelpPanel() else TreatBadge.draw(s, uiW - 250f, uiH - 92f)
         Ui.buttons(s, buttons, pressedId)
         s.end()
         beginUiText()
@@ -52,6 +52,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         } else {
             Ui.text(batch, a.title, "Pawtillery", uiW / 2f, uiH - 130f, Palette.WHITE)
             Ui.text(batch, a.body, "Build a fort. Splat the neighbor's pet.", uiW / 2f, uiH - 239f, Palette.WHITE)
+            TreatBadge.text(batch, a, game.settings.treats, uiW - 250f, uiH - 92f)
         }
         Ui.buttonLabels(batch, a, buttons, pressedId)
         batch.end()
@@ -112,8 +113,8 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
 
     override fun onButton(id: String) {
         when (id) {
-            "play_ai" -> game.switchTo(GameScreen(game, twoPlayers = false))
-            "play_2p" -> game.switchTo(GameScreen(game, twoPlayers = true))
+            "play_ai" -> game.switchTo(PetSelectScreen(game, twoPlayers = false))
+            "play_2p" -> game.switchTo(PetSelectScreen(game, twoPlayers = true))
             "mode" -> game.settings.easyMode = !game.settings.easyMode
             "sound" -> game.settings.sound = !game.settings.sound
             "help" -> showHelp = true

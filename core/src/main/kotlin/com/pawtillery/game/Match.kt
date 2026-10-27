@@ -27,8 +27,14 @@ class MatchConfig(
     val easyMode: Boolean,
     val leftKind: PetKind = PetKind.DOG,
     val rightKind: PetKind = PetKind.CAT,
+    val throwsPerPlayer: Int = FULL_MATCH,
     val seed: Long = System.nanoTime(),
-)
+) {
+    companion object {
+        const val FULL_MATCH = 10
+        const val QUICK_MATCH = 5
+    }
+}
 
 sealed interface MatchEvent {
     data class BuildStarted(val side: Side) : MatchEvent
@@ -72,8 +78,8 @@ class Match(val config: MatchConfig) : Disposable {
     var time = 0f
         private set
 
-    /** The un-split hairball in the air, if any. */
-    var activeHairball: Projectile? = null
+    /** A thrown item that can still be split by tapping (hairball, seed shower), if one is in the air. */
+    var activeSplitter: Projectile? = null
         private set
 
     private val throwsDone = IntArray(2)
@@ -116,7 +122,7 @@ class Match(val config: MatchConfig) : Disposable {
     /** Items left; -1 means unlimited. */
     fun count(side: Side, item: ItemType): Int = inventory[side.ordinal][item.ordinal]
 
-    fun throwsLeft(side: Side): Int = Arena.THROWS_PER_PLAYER - throwsDone[side.ordinal]
+    fun throwsLeft(side: Side): Int = config.throwsPerPlayer - throwsDone[side.ordinal]
 
     fun piecesLeft(side: Side): Int = Arena.PIECES_PER_PLAYER - pieces.count { it.side == side }
 
@@ -185,16 +191,16 @@ class Match(val config: MatchConfig) : Disposable {
         lastVelocity[side.ordinal] = Vector2(v)
         val origin = Arena.launchPoint(side)
         val p = spawnProjectile(item, side, origin.x, origin.y, v.x, v.y, fragment = false)
-        if (item == ItemType.HAIRBALL) activeHairball = p
+        if (item.splitCount > 0) activeSplitter = p
         phase = Phase.FLIGHT
         events.add(MatchEvent.Thrown(side, item))
         return true
     }
 
-    /** Splits the hairball in the air into three smaller ones. */
-    fun splitHairball(): Boolean {
-        val p = activeHairball ?: return false
-        activeHairball = null
+    /** Splits the item in the air (hairball, seed shower) into smaller pieces that fan out. */
+    fun splitActive(): Boolean {
+        val p = activeSplitter ?: return false
+        activeSplitter = null
         if (p.dead || phase != Phase.FLIGHT) return false
         val x = p.body.position.x
         val y = p.body.position.y
@@ -202,10 +208,12 @@ class Match(val config: MatchConfig) : Disposable {
         val vy = p.body.linearVelocity.y
         world.destroyBody(p.body)
         projectiles.remove(p)
-        for (deg in floatArrayOf(-11f, 0f, 11f)) {
+        val item = p.item
+        for (i in 0 until item.splitCount) {
+            val deg = (i - (item.splitCount - 1) / 2f) * item.splitSpread
             val c = MathUtils.cosDeg(deg)
             val s = MathUtils.sinDeg(deg)
-            spawnProjectile(ItemType.HAIRBALL, p.side, x, y, vx * c - vy * s, vx * s + vy * c, fragment = true)
+            spawnProjectile(item, p.side, x, y, vx * c - vy * s, vx * s + vy * c, fragment = true)
         }
         events.add(MatchEvent.Split(x, y))
         return true
@@ -271,7 +279,7 @@ class Match(val config: MatchConfig) : Disposable {
         val l = pet(Side.LEFT).mess
         val r = pet(Side.RIGHT).mess
         val someoneLost = l >= Arena.MESS_TO_LOSE || r >= Arena.MESS_TO_LOSE
-        val outOfThrows = throwsDone.all { it >= Arena.THROWS_PER_PLAYER }
+        val outOfThrows = throwsDone.all { it >= config.throwsPerPlayer }
         if (someoneLost || outOfThrows) {
             phase = Phase.OVER
             winner = when {
@@ -407,7 +415,7 @@ class Match(val config: MatchConfig) : Disposable {
             val p = it.next()
             if (!p.dead) continue
             world.destroyBody(p.body)
-            if (p === activeHairball) activeHairball = null
+            if (p === activeSplitter) activeSplitter = null
             it.remove()
         }
     }
@@ -502,14 +510,19 @@ class Match(val config: MatchConfig) : Disposable {
             type = BodyDef.BodyType.DynamicBody
             position.set(x, y)
             linearVelocity.set(vx, vy)
-            angularVelocity = -side.dir * (if (item == ItemType.BONE) 12f else 4f)
+            angularVelocity = when (item) {
+                ItemType.BONE -> -side.dir * 12f
+                ItemType.CARROT -> 0f
+                else -> -side.dir * 4f
+            }
+            fixedRotation = item == ItemType.CARROT
             gravityScale = item.gravityScale
             bullet = true
         })
         val p = Projectile(item, side, body, fragment)
         body.userData = p
         val shape = CircleShape().apply { radius = p.radius }
-        addFixture(body, shape, item.density, 0.5f, item.restitution, Bits.shot(side), Bits.shotMask(side))
+        addFixture(body, shape, item.density, if (item == ItemType.SHELL) 0.15f else 0.5f, item.restitution, Bits.shot(side), Bits.shotMask(side))
         projectiles.add(p)
         return p
     }

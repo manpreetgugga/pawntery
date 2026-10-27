@@ -11,6 +11,10 @@ import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.utils.BufferUtils
 import com.badlogic.gdx.utils.ScreenUtils
 import com.pawtillery.game.BaseScreen
+import com.pawtillery.game.GameScreen
+import com.pawtillery.game.MatchSetup
+import com.pawtillery.game.PetKind
+import com.pawtillery.game.Side
 import com.pawtillery.game.Pawtillery
 import java.io.File
 import kotlin.math.min
@@ -51,28 +55,41 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(1.6f) { shot("02-help") }
         at(1.7f) { tap("help_close") }
         at(1.8f) { tap("play_ai") }
-        at(3.0f) { shot("03-build-start") }
-        at(3.1f) { tap("piece:CRATE") }
-        at(3.2f) { down(screen.worldOnScreen(11f, 8f)) }
-        at(3.3f) { drag(screen.worldOnScreen(10.4f, 8f)) }
-        at(3.4f) { shot("04-build-ghost") }
-        at(3.5f) { up(screen.worldOnScreen(10.4f, 8f)) }
-        at(3.7f) { tap("auto") }
-        at(5.8f) { shot("05-build-auto") }
-        at(5.9f) { tap("ready") }
-        at(7.2f) { shot("06-computer-building") }
-        at(11f) { shot("07-your-turn") }
-        at(11.1f) { down(screen.uiOnScreen(800f, 450f)) }
-        at(11.2f) { drag(screen.uiOnScreen(700f, 380f)) }
-        at(11.3f) { drag(screen.uiOnScreen(590f, 300f)) }
-        at(11.4f) { shot("08-aiming") }
-        at(11.5f) { up(screen.uiOnScreen(590f, 300f)) }
-        at(12.1f) { shot("09-flight") }
-        at(15.6f) { shot("10-computer-aiming") }
-        at(19f) { shot("11-after-computer") }
-        at(19.1f) { tap("pause") }
-        at(19.3f) { shot("12-paused") }
-        at(19.4f) { Gdx.app.exit() }
+        at(2.3f) { shot("03-pets") }
+        at(2.4f) { tap("pet:PARROT") }
+        at(2.6f) { shot("04-unlock-offer") }
+        at(2.7f) { tap("offer_close") }
+        at(2.8f) { tap("pet:DOG") }
+        at(2.9f) { tap("go") }
+        at(4.0f) { shot("05-build-start") }
+        at(4.1f) { tap("piece:CRATE") }
+        at(4.2f) { down(screen.worldOnScreen(11f, 8f)) }
+        at(4.3f) { drag(screen.worldOnScreen(10.4f, 8f)) }
+        at(4.4f) { shot("06-build-ghost") }
+        at(4.5f) { up(screen.worldOnScreen(10.4f, 8f)) }
+        at(4.7f) { tap("auto") }
+        at(6.8f) { shot("07-build-auto") }
+        at(6.9f) { tap("ready") }
+        at(8.2f) { shot("08-computer-building") }
+        at(12f) { shot("09-your-turn") }
+        at(12.1f) { down(screen.uiOnScreen(800f, 450f)) }
+        at(12.2f) { drag(screen.uiOnScreen(700f, 380f)) }
+        at(12.3f) { drag(screen.uiOnScreen(590f, 300f)) }
+        at(12.4f) { shot("10-aiming") }
+        at(12.5f) { up(screen.uiOnScreen(590f, 300f)) }
+        at(13.1f) { shot("11-flight") }
+        at(16.6f) { shot("12-computer-aiming") }
+        at(20f) { shot("13-after-computer") }
+        at(20.1f) { tap("pause") }
+        at(20.3f) { shot("14-paused") }
+        // A short computer-vs-computer match with the unlockable pets, played to the end.
+        at(20.4f) {
+            game.switchTo(GameScreen(game, MatchSetup(PetKind.BUNNY, PetKind.TURTLE, setOf(Side.LEFT, Side.RIGHT), 2)))
+        }
+        at(27f) { shot("15-bunny-vs-turtle") }
+        at(30f) { shot("16-bunny-vs-turtle-later") }
+        at(62f) { shot("17-game-over") }
+        at(62.1f) { Gdx.app.exit() }
     }
 
     override fun render() {
