@@ -12,5 +12,5 @@ fun main() {
         useVsync(true)
         setForegroundFPS(60)
     }
-    Lwjgl3Application(Pawtillery(), config)
+    Lwjgl3Application(Pawtillery(DemoPlatform()), config)
 }

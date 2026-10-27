@@ -25,7 +25,7 @@ import kotlin.math.min
  * screen can be checked without a phone: ./gradlew :lwjgl3:tour --args="out-dir 1280 720"
  */
 class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
-    private val game = Pawtillery()
+    private val game = Pawtillery(DemoPlatform())
     private var time = 0f
     private var next = 0
     private val steps = ArrayList<Pair<Float, () -> Unit>>()
@@ -109,7 +109,17 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(76.5f) { throwComputerShot() }
         at(80.5f) { throwComputerShot() }
         at(84.5f) { shot("20-level-result") }
-        at(84.6f) { Gdx.app.exit() }
+        at(84.6f) { tap("double_ad") }
+        at(85f) { shot("21-ad-loading") }
+        at(87f) { shot("22-ad-doubled") }
+        at(87.1f) { game.switchTo(MenuScreen(game)) }
+        at(87.7f) { tap("shop") }
+        at(88.3f) { shot("23-shop") }
+        at(88.4f) { tap("buy") }
+        at(88.6f) { tap("gate:4"); tap("gate:2") }
+        at(88.8f) { shot("24-parent-gate") }
+        at(88.9f) { tap("gate:cancel") }
+        at(89.2f) { Gdx.app.exit() }
     }
 
     override fun render() {

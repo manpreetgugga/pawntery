@@ -38,6 +38,10 @@ Ten single-player puzzle levels. Each gives you a pet and a set of throws agains
 
 Every finished game earns **treats** (win 30, draw 18, loss 12 for a full match, plus 2 per direct hit). The computer can play any pet, so players see what they can unlock.
 
+## Earning money
+
+Free to play, with one optional **Pawtillery Plus** purchase (all pets now, no ads, double treats) and an optional **rewarded ad** that doubles a game's treats (at most 5 a day). No banner or pop-up ads, loot boxes or timers. A grown-up check guards every purchase and outside link. The game talks to the store and ads only through the `Platform` interface. The Android app ships with them switched off until you connect your Play Console and AdMob accounts. See **[docs/MONETIZATION.md](docs/MONETIZATION.md)** for the steps and ready-made Android code, and **[docs/privacy-policy.md](docs/privacy-policy.md)** for the privacy policy.
+
 ## Build the Android app
 
 1. Install [Android Studio](https://developer.android.com/studio) (it includes the Android SDK and JDK 17+).

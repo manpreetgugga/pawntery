@@ -60,6 +60,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private val hop = FloatArray(2)
     private var overTime = 0f
     private var treatsEarned = 0
+    /** The optional rewarded ad that doubles a game's treats: not offered, showing, or used. */
+    private var adPlaying = false
+    private var adUsed = false
     private var unlockable: PetKind? = null
     private val humans = Side.entries.filter { it !in setup.computer }
 
@@ -430,6 +433,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             id == "resume" -> paused = false
             id == "restart" || id == "rematch" -> restart()
             id == "levels" -> game.switchTo(ChallengeListScreen(game))
+            id == "double_ad" -> if (canOfferAd()) watchAdForDoubleTreats()
             id == "next" -> {
                 val next = challenge?.let { Challenges.byNumber(it.number + 1) }
                 if (next != null) game.switchTo(GameScreen(game, MatchSetup.forChallenge(next)))
@@ -474,6 +478,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         match = newMatch()
         computer = newComputer()
         treatsEarned = 0
+        adPlaying = false
+        adUsed = false
         starsEarned = 0
         unlockable = null
         particles.clear()
@@ -715,6 +721,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         }
         if (match.phase == Phase.OVER) {
             val c = challenge
+            if (overTime > 0.9f && canOfferAd()) {
+                list += Button("double_ad", uiW / 2f + 10f, treatsLineY() - 32f, 360f, 64f, "Watch an ad: double it", ButtonStyle.TEAL, font = game.assets.body)
+            }
             if (overTime > 0.9f && c != null) {
                 val cx = uiW / 2f
                 val next = Challenges.byNumber(c.number + 1)
@@ -1018,7 +1027,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 else -> "Perfect!"
             }
             Ui.text(batch, a.body, next, cx, uiH / 2f - 100f, Palette.INK, 0.8f, 780f)
-            if (treatsEarned > 0) Ui.text(batch, a.h2, "+$treatsEarned treats", cx, uiH / 2f - 144f, Palette.ACCENT_DARK)
+            drawTreatsLine("+$treatsEarned treats")
             return
         }
         val winner = match.winner
@@ -1051,11 +1060,44 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             Ui.text(batch, a.body, "$who ${st.hits} of ${st.throws} throws hit$trickText", cx, y, Palette.INK, 0.8f)
             y -= 38f
         }
-        if (treatsEarned > 0) {
-            val next = unlockable
-            val line = if (next != null) "+$treatsEarned treats! You can unlock ${next.displayName} now" else "+$treatsEarned treats"
-            Ui.text(batch, a.h2, line, cx, uiH / 2f - 176f, Palette.ACCENT_DARK, maxWidth = 780f)
-        }
+        val next = unlockable
+        drawTreatsLine(if (next != null && !canOfferAd()) "+$treatsEarned treats! You can unlock ${next.displayName} now" else "+$treatsEarned treats")
+    }
+
+    private fun treatsLineY(): Float = uiH / 2f - if (challenge != null) 144f else 176f
+
+    /** The treats a game earned, with room beside it for the optional ad button. */
+    private fun drawTreatsLine(line: String) {
+        if (treatsEarned <= 0) return
+        val a = game.assets
+        val offered = canOfferAd()
+        val x = if (offered) uiW / 2f - 170f else uiW / 2f
+        Ui.text(batch, a.h2, line, x, treatsLineY(), Palette.ACCENT_DARK, maxWidth = if (offered) 340f else 780f)
+        if (adPlaying) Ui.text(batch, a.body, "Loading the ad...", uiW / 2f + 190f, treatsLineY(), Palette.INK, 0.7f)
+    }
+
+    /** Rewarded ads are optional, never shown with Plus, and capped per day. */
+    private fun canOfferAd(): Boolean =
+        treatsEarned > 0 && !adUsed && !adPlaying && game.platform.rewardedAdReady && game.settings.canWatchAd(today())
+
+    private fun today(): String = java.time.LocalDate.now().toString()
+
+    private fun watchAdForDoubleTreats() {
+        adPlaying = true
+        val day = today()
+        game.platform.showRewardedAd(
+            onReward = {
+                game.settings.addTreats(treatsEarned)
+                game.settings.recordAdWatched(day)
+                treatsEarned *= 2
+                unlockable = PetKind.entries.firstOrNull { !game.settings.isUnlocked(it) && game.settings.treats >= it.price }
+                game.sfx("win", 0.7f)
+            },
+            onDone = {
+                adPlaying = false
+                adUsed = true
+            },
+        )
     }
 
     private companion object {

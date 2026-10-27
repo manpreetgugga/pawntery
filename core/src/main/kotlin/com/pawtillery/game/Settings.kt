@@ -48,7 +48,24 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
         get() = prefs.getInteger("gamesPlayed", 0)
         private set(value) = save { prefs.putInteger("gamesPlayed", value) }
 
-    fun isUnlocked(kind: PetKind): Boolean = kind.price == 0 || prefs.getBoolean("unlocked.${kind.name}", false)
+    /** Pawtillery Plus: every pet, no ads, double treats. Bought once in the Shop. */
+    var plus: Boolean
+        get() = prefs.getBoolean("plus", false)
+        set(value) = save { prefs.putBoolean("plus", value) }
+
+    /** Treats from games and stars are doubled with Plus. */
+    val treatMultiplier: Int get() = if (plus) 2 else 1
+
+    fun isUnlocked(kind: PetKind): Boolean = plus || kind.price == 0 || prefs.getBoolean("unlocked.${kind.name}", false)
+
+    fun addTreats(amount: Int) = save { prefs.putInteger("treats", treats + amount) }
+
+    /** Rewarded ads are optional and capped per day; [today] is an ISO date like 2026-10-27. */
+    fun canWatchAd(today: String): Boolean = !plus && adsWatched(today) < MAX_ADS_PER_DAY
+
+    fun recordAdWatched(today: String) = save { prefs.putInteger("ads.$today", adsWatched(today) + 1) }
+
+    private fun adsWatched(today: String) = prefs.getInteger("ads.$today", 0)
 
     /** Spends treats on [kind]; returns false if it is already unlocked or there aren't enough treats. */
     fun buyPet(kind: PetKind): Boolean {
@@ -69,7 +86,7 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
             GameResult.DRAW -> 18
             GameResult.LOSS -> 12
         }
-        val earned = (base * throwsPerPlayer / MatchConfig.FULL_MATCH * levelFactor).toInt() + hits * 2 + tricks * 5
+        val earned = ((base * throwsPerPlayer / MatchConfig.FULL_MATCH * levelFactor).toInt() + hits * 2 + tricks * 5) * treatMultiplier
         prefs.putInteger("treats", treats + earned)
         prefs.putInteger("gamesPlayed", gamesPlayed + 1)
         if (result == GameResult.WIN) prefs.putInteger("wins", wins + 1)
@@ -88,7 +105,7 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
     fun recordChallenge(number: Int, stars: Int): Int {
         val before = challengeStars(number)
         if (stars <= before) return 0
-        val earned = (stars - before) * 10
+        val earned = (stars - before) * 10 * treatMultiplier
         prefs.putInteger("challenge.$number.stars", stars)
         prefs.putInteger("treats", treats + earned)
         prefs.flush()
@@ -102,3 +119,5 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
 }
 
 enum class GameResult { WIN, DRAW, LOSS }
+
+const val MAX_ADS_PER_DAY = 5

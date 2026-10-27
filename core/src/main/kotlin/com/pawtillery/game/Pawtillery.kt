@@ -7,7 +7,8 @@ import com.badlogic.gdx.Screen
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 
-class Pawtillery : Game() {
+/** The game. [platform] connects it to the app store and ads; without one, the paid parts stay hidden. */
+class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
     lateinit var settings: Settings
         private set
     lateinit var assets: Assets
@@ -23,6 +24,8 @@ class Pawtillery : Game() {
         assets = Assets().apply { load() }
         shapes = ShapeRenderer(8000)
         batch = SpriteBatch()
+        // A phone that was reset or a new install gets Plus back without visiting the Shop.
+        if (!settings.plus) platform.restorePurchases { owned -> if (owned) settings.plus = true }
         setScreen(MenuScreen(this))
     }
 
