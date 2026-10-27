@@ -10,6 +10,11 @@ class AndroidLauncher : AndroidApplication() {
         super.onCreate(savedInstanceState)
         val config = AndroidApplicationConfiguration().apply {
             useImmersiveMode = true
+            // Draw the backyard edge to edge on every Android version; the game keeps its
+            // buttons inside the safe area reported by the phone.
+            renderUnderCutout = true
+            // Keep the screen awake while a player lines up a shot.
+            useWakelock = true
             useAccelerometer = false
             useCompass = false
             numSamples = 2

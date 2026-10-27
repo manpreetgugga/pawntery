@@ -56,6 +56,10 @@ Free to play, with one optional **Pawtillery Plus** purchase (all pets now, no a
 
 From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK in `android/build/outputs/apk/debug/`).
 
+## Publishing on Google Play
+
+Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 1024x500 feature graphic, seven 1920x1080 screenshots and **[store/listing.md](store/listing.md)** (name, short and full description, category, release notes). The launcher icon in the app matches the store icon. Follow docs/MONETIZATION.md for the content rating, target audience (Families) and Data safety answers.
+
 ## Project layout
 
 | Folder | What's in it |
@@ -64,6 +68,7 @@ From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK 
 | `android/` | Android launcher, manifest, icon |
 | `lwjgl3/` | Desktop window for quick testing on a computer (`./gradlew :lwjgl3:run`) |
 | `assets/` | Fonts and sound effects shared by both |
+| `store/` | Play Store icon, feature graphic, screenshots and listing text (`./gradlew -p tools/desktop-build :lwjgl3:storeAssets` redraws the icons and feature graphic) |
 | `tools/gen_sounds.py` | Regenerates the sound effects and pet voices (`python3 tools/gen_sounds.py`, standard library only) |
 | `tools/gen_music.py` | Regenerates the two music loops (`python3 tools/gen_music.py`, needs numpy and ffmpeg) |
 

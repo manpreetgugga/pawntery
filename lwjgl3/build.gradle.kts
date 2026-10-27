@@ -38,6 +38,16 @@ tasks.named<JavaExec>("run") {
     workingDir = file("../assets")
 }
 
+tasks.register<JavaExec>("storeAssets") {
+    group = "distribution"
+    description = "Renders the Play Store icon, launcher icon layers and feature graphic into store/ and android/res/"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.pawtillery.game.lwjgl3.StoreAssetsKt")
+    workingDir = file("../assets")
+    args(file("..").absolutePath)
+    jvmArgs(application.applicationDefaultJvmArgs)
+}
+
 tasks.register<JavaExec>("tour") {
     group = "verification"
     description = "Plays a scripted session and saves screenshots: --args=\"<out-dir> <width> <height>\""

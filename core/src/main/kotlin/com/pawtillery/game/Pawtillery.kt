@@ -66,6 +66,6 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
 
     companion object {
         /** Keep in step with versionName in android/build.gradle.kts. */
-        const val VERSION = "0.1.0"
+        const val VERSION = "1.0.0"
     }
 }

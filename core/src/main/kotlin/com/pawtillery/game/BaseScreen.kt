@@ -88,7 +88,15 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
         worldView.update(width, height, false)
         worldCam.position.set(Arena.WIDTH / 2f, Arena.VIEW_BOTTOM + worldView.worldHeight / 2f, 0f)
         worldCam.update()
-        uiView.update(width, height, true)
+        // The backyard fills the whole screen; buttons and text stay clear of camera cutouts and
+        // rounded corners (Android 15+ always draws apps edge to edge).
+        val g = Gdx.graphics
+        val left = g.safeInsetLeft
+        val right = g.safeInsetRight
+        val top = g.safeInsetTop
+        val bottom = g.safeInsetBottom
+        uiView.update(width - left - right, height - top - bottom, true)
+        uiView.setScreenPosition(left, bottom)
     }
 
     protected fun clear() {
@@ -134,11 +142,10 @@ abstract class BaseScreen(protected val game: Pawtillery) : ScreenAdapter() {
         shapes.end()
     }
 
-    /** Maps a point in the backyard to UI coordinates (both views always cover the whole screen). */
+    /** Maps a point in the backyard to UI coordinates, through screen pixels. */
     protected fun worldToUi(x: Float, y: Float, out: Vector2): Vector2 {
-        val ux = (x - viewLeft) / worldView.worldWidth * uiW
-        val uy = (y - (worldCam.position.y - worldView.worldHeight / 2f)) / worldView.worldHeight * uiH
-        return out.set(ux, uy)
+        val screen = worldView.project(out.set(x, y))
+        return uiView.unproject(screen.set(screen.x, Gdx.graphics.height - screen.y))
     }
 
     /** Draws an icon in UI space by scaling world-meter art: [draw] works in meters around (0, 0). */
