@@ -55,6 +55,8 @@ From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK 
 
 Run the unit tests with `./gradlew :core:test`. They play full computer-vs-computer matches on the real physics.
 
+No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-build :core:test :lwjgl3:build` builds and tests everything except the Android launcher.
+
 `./gradlew :lwjgl3:tour --args="<out-dir> 1280 720"` plays a scripted session through real touch input and saves a screenshot of every screen, for checking the look without a phone.
 
 ## Credits
