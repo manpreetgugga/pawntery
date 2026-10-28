@@ -21,6 +21,17 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        // A fixed debug key (Android's standard debug passwords), so each test APK built on GitHub
+        // installs over the last one. Play Store builds use your own upload key, never this one.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     sourceSets {
         getByName("main") {
             manifest.srcFile("AndroidManifest.xml")

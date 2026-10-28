@@ -11,7 +11,9 @@ Two neighbors' pets live on either side of a garden fence. First each player **b
 **Easiest: download the APK GitHub builds for you.** Every push to `main` runs the *Build* workflow (Actions tab), which tests the game, builds the Android app and publishes it as the **Latest build** release.
 1. On your phone, open <https://github.com/manpreetgugga/pawntery/releases/download/latest-build/pawtillery.apk> (or the repository's **Releases** > **Latest build** > `pawtillery.apk`).
 2. Open the downloaded file. Android asks you once to allow installing apps from your browser or Files app.
-3. If Google Play Protect warns about an unknown app, tap **More details** > **Install anyway**. It's a test build signed by the build machine, not yet by your Play account.
+3. If Google Play Protect warns about an unknown app, tap **More details** > **Install anyway**. It's a test build signed with a test key (`android/debug.keystore`), not yet by your Play account.
+
+Every test build is signed with that same key, so a newer APK installs straight over the older one and keeps your treats and progress. (APKs built before October 28, 2026 used a random key: uninstall that one once first.)
 
 The same APK is also kept for 90 days as the **pawtillery-debug-apk** artifact (a zip) on each Actions run.
 

@@ -13,3 +13,6 @@ build/
 # Signing keys - never commit these
 *.jks
 *.keystore
+# ...except the debug key for test builds: it has the standard public debug passwords and can't
+# publish anything on Google Play, but keeps every test APK installable over the previous one.
+!/android/debug.keystore
