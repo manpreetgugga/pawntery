@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Test builds only (merged into the main manifest for debug builds): they check GitHub for a newer
+  test build and hand it to the phone's installer. Google Play builds never get these, because Play
+  updates the store version itself and doesn't allow apps to install their own updates.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- Lets the installer read the downloaded update from the game's private cache. -->
+        <provider
+            android:name=".android.UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

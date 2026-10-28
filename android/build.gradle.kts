@@ -9,6 +9,10 @@ plugins {
 val natives: Configuration by configurations.creating
 val abis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 
+// GitHub numbers its builds. Test builds take that number, so each one is newer than the last and
+// installed copies know when to update. Builds made on your own computer are build 0.
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+
 android {
     namespace = "com.pawtillery.game"
     compileSdk = 36
@@ -17,8 +21,8 @@ android {
         applicationId = "com.pawtillery.game"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 1 + buildNumber
+        versionName = if (buildNumber > 0) "1.0.0 (test build $buildNumber)" else "1.0.0"
     }
 
     signingConfigs {
@@ -69,6 +73,15 @@ dependencies {
         natives("com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-$abi")
         natives("com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-$abi")
     }
+}
+
+// The version of this build, for the update.json that installed test builds read to find newer ones.
+val writeUpdateInfo by tasks.registering {
+    val code = android.defaultConfig.versionCode
+    val name = android.defaultConfig.versionName
+    val out = layout.buildDirectory.file("outputs/update-info.json")
+    outputs.file(out)
+    doLast { out.get().asFile.writeText("{\"versionCode\": $code, \"versionName\": \"$name\"}\n") }
 }
 
 val copyAndroidNatives by tasks.registering(Copy::class) {

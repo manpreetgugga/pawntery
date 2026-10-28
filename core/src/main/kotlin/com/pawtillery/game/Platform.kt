@@ -26,6 +26,9 @@ interface Platform {
     fun showRewardedAd(onReward: () -> Unit, onDone: () -> Unit)
 
     fun openUrl(url: String)
+
+    /** Test builds from GitHub can update themselves; store builds return null (the store updates them). */
+    val selfUpdate: SelfUpdate? get() = null
 }
 
 /** No store and no ads: the paid parts of the game stay hidden. The default until accounts are set up. */

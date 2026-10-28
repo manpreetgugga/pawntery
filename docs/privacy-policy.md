@@ -1,6 +1,6 @@
 # Pawtillery Privacy Policy
 
-*Last updated: October 27, 2026*
+*Last updated: October 28, 2026*
 
 Pawtillery is a family game. It is made to be played by children and grown-ups, and it is built to collect as little as possible.
 
@@ -9,6 +9,10 @@ Pawtillery is a family game. It is made to be played by children and grown-ups, 
 **Nothing about you.** Pawtillery has no accounts, no sign-in, no chat, no social features and no way to share anything you type, say or photograph. It does not ask for your name, age, email, location, contacts or photos.
 
 Your progress (treats, unlocked pets, stars, settings) is saved **only on your device**. Uninstalling the game deletes it.
+
+## Test versions
+
+The version on Google Play never goes online by itself. Test versions downloaded from the game's GitHub page are different: when the menu opens, they ask GitHub whether a newer test version exists and, if so, download it to the device. These requests go to GitHub and, like any web request, include technical information such as the device's IP address. They carry nothing about the player. GitHub's privacy statement: <https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement>.
 
 ## Purchases
 

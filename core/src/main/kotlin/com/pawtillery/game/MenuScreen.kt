@@ -8,6 +8,15 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
     private var time = 0f
     private var showHelp = false
 
+    init {
+        // Test builds look for a newer build each time the menu opens (at most every half hour).
+        game.updater?.checkIfDue(game.clock)
+    }
+
+    /** The "new version ready" offer, shown once an update has downloaded, until the player says Later. */
+    private val showUpdate: Boolean
+        get() = !showHelp && game.updater?.let { it.state == Updater.State.READY && !it.dismissed } == true
+
     override fun render(delta: Float) {
         time += delta
         clear()
@@ -37,6 +46,7 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         s.end()
 
         buttons = layoutButtons()
+        val (dialog, main) = buttons.partition { it.layer > 0 }
         val a = game.assets
         beginUiShapes()
         if (!showHelp) {
@@ -44,7 +54,9 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             Ui.roundRect(s, uiW / 2f - 330f, uiH - 268f, 660f, 58f, 29f)
         }
         if (showHelp) drawHelpPanel() else TreatBadge.draw(s, uiW - 250f, uiH - 92f)
-        Ui.buttons(s, buttons, pressedId)
+        val downloading = !showHelp && game.updater?.state == Updater.State.DOWNLOADING
+        if (downloading) drawDownloadShapes()
+        Ui.buttons(s, main, pressedId)
         s.end()
         beginUiText()
         if (showHelp) {
@@ -54,9 +66,43 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             Ui.text(batch, a.body, "Build a fort. Splat the neighbor's pet.", uiW / 2f, uiH - 239f, Palette.WHITE)
             TreatBadge.text(batch, a, game.settings.treats, uiW - 250f, uiH - 92f)
         }
-        Ui.buttonLabels(batch, a, buttons, pressedId)
+        if (downloading) Ui.textAt(batch, a.small, "Downloading update  ${((game.updater?.progress ?: 0f) * 100).toInt()}%", 44f, uiH - 46f, Palette.INK)
+        Ui.buttonLabels(batch, a, main, pressedId)
         batch.end()
+        if (showUpdate) drawUpdateOffer(dialog)
         drawFade(delta)
+    }
+
+    private fun drawDownloadShapes() {
+        val s = shapes
+        val x = 20f
+        val y = uiH - 92f
+        Ui.panel(s, x, y, 420f, 70f, r = 30f)
+        s.color = Palette.PANEL_EDGE
+        Ui.roundRect(s, x + 24f, y + 12f, 372f, 14f, 7f)
+        s.color = Palette.TEAL
+        Ui.roundRect(s, x + 24f, y + 12f, kotlin.math.max(14f, 372f * (game.updater?.progress ?: 0f)), 14f, 7f)
+    }
+
+    private fun drawUpdateOffer(dialog: List<Button>) {
+        val u = game.updater ?: return
+        val info = u.available ?: return
+        val a = game.assets
+        val cx = uiW / 2f
+        shadeScreen(Palette.SHADE)
+        beginUiShapes()
+        Ui.panel(shapes, cx - 440f, uiH / 2f - 230f, 880f, 470f)
+        Ui.buttons(shapes, dialog, pressedId)
+        shapes.end()
+        beginUiText()
+        Ui.text(batch, a.h1, "New version ready!", cx, uiH / 2f + 170f, Palette.WHITE)
+        Ui.text(batch, a.h2, info.versionName, cx, uiH / 2f + 96f, Palette.INK, maxWidth = 800f)
+        val notes = info.notes.ifBlank { "Fixes and improvements." }
+        Ui.paragraph(batch, a.body, "What's new: $notes", cx, uiH / 2f + 54f, 760f, Palette.INK)
+        val note = u.message ?: "Your treats, pets and stars stay as they are."
+        Ui.text(batch, a.small, note, cx, uiH / 2f - 92f, Palette.INK, 0.8f, 800f)
+        Ui.buttonLabels(batch, a, dialog, pressedId)
+        batch.end()
     }
 
     private fun scenePiece(type: PieceType, x: Float, y: Float) {
@@ -82,7 +128,17 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
         val cx = uiW / 2f
         if (showHelp) return listOf(Button("help_close", cx - 160f, 70f, 320f, 92f, "Got it!", ButtonStyle.PRIMARY))
         val easy = game.settings.easyMode
-        return listOf(
+        val u = game.updater
+        val update = when {
+            showUpdate -> listOf(
+                Button("update_later", cx - 350f, uiH / 2f - 200f, 330f, 96f, "Later", layer = 1),
+                Button("update_install", cx + 20f, uiH / 2f - 200f, 330f, 96f, "Install", ButtonStyle.PRIMARY, layer = 1),
+            )
+            u != null && u.state == Updater.State.READY ->
+                listOf(Button("update_open", 20f, uiH - 112f, 420f, 92f, "Update ready!", ButtonStyle.GOLD, sublabel = "Tap to install ${u.available?.versionName}"))
+            else -> emptyList()
+        }
+        return update + listOf(
             Button("play_ai", cx - 290f, uiH / 2f + 10f, 580f, 100f, "Play vs Computer", ButtonStyle.PRIMARY),
             Button("play_2p", cx - 290f, uiH / 2f - 105f, 580f, 100f, "2 Players · One Phone", ButtonStyle.TEAL),
             Button("tricks", cx - 290f, uiH / 2f - 220f, 282f, 100f, "Trick Shots", ButtonStyle.GOLD,
@@ -133,12 +189,19 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             "help" -> showHelp = true
             "shop" -> game.switchTo(ShopScreen(game))
             "help_close" -> showHelp = false
+            "update_open" -> game.updater?.dismissed = false
+            "update_later" -> game.updater?.dismissed = true
+            "update_install" -> game.updater?.install()
         }
     }
 
     override fun onKey(keycode: Int): Boolean {
         if (keycode != Input.Keys.BACK && keycode != Input.Keys.ESCAPE) return false
-        if (showHelp) showHelp = false else Gdx.app.exit()
+        when {
+            showUpdate -> game.updater?.dismissed = true
+            showHelp -> showHelp = false
+            else -> Gdx.app.exit()
+        }
         return true
     }
 }

@@ -7,6 +7,7 @@ import com.badlogic.gdx.Screen
 import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
+import com.badlogic.gdx.utils.TimeUtils
 
 /** The game. [platform] connects it to the app store and ads; without one, the paid parts stay hidden. */
 class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
@@ -19,6 +20,12 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
     lateinit var batch: SpriteBatch
         private set
 
+    /** Keeps a test build up to date; null for store builds and on desktop. */
+    var updater: Updater? = null
+
+    /** Seconds on a steady clock, for spacing out update checks. */
+    val clock: Double get() = TimeUtils.nanoTime() / 1e9
+
     override fun create() {
         Gdx.input.setCatchKey(Input.Keys.BACK, true)
         settings = Settings()
@@ -27,6 +34,7 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
         batch = SpriteBatch()
         // A phone that was reset or a new install gets Plus back without visiting the Shop.
         if (!settings.plus) platform.restorePurchases { owned -> if (owned) settings.plus = true }
+        updater = platform.selfUpdate?.let { Updater(it, GdxFetch()) }
         setScreen(MenuScreen(this))
     }
 
@@ -63,6 +71,9 @@ class Pawtillery(val platform: Platform = OfflinePlatform()) : Game() {
         shapes.dispose()
         batch.dispose()
     }
+
+    /** The version to show players: the installed build's own when known. */
+    val version: String get() = updater?.currentVersion ?: VERSION
 
     companion object {
         /** Keep in step with versionName in android/build.gradle.kts. */

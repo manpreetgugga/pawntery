@@ -33,12 +33,14 @@ class SettingsScreen(game: Pawtillery) : BaseScreen(game) {
         Ui.text(batch, a.h1, "Settings", cx, uiH - 70f, Palette.WHITE)
         Ui.paragraph(
             batch, a.small,
-            "Pawtillery ${Pawtillery.VERSION}. Made with libGDX and Box2D. Fonts: Titan One and Varela Round (SIL Open Font License). " +
+            "Pawtillery ${game.version}. Made with libGDX and Box2D. Fonts: Titan One and Varela Round (SIL Open Font License). " +
                 "All art, music and sound effects are made in code for this game.",
             cx, uiH / 2f - 160f, 940f, Palette.INK,
         )
         Ui.buttonLabels(batch, a, main, pressedId)
         if (messageTime > 0f) Ui.text(batch, a.h2, message, cx, 180f, Palette.WHITE, kotlin.math.min(1f, messageTime * 3f))
+        // What the phone's installer needs, if anything (like allowing Pawtillery to install updates).
+        game.updater?.message?.let { if (it.isNotEmpty() && game.updater?.state == Updater.State.READY) Ui.text(batch, a.small, it, cx, 150f, Palette.WHITE, maxWidth = 1100f) }
         batch.end()
 
         if (confirmReset) {
@@ -77,6 +79,7 @@ class SettingsScreen(game: Pawtillery) : BaseScreen(game) {
             Button("back", 40f, 34f, 220f, 96f, "Back"),
             Button("reset", uiW - 340f, 34f, 300f, 96f, "Reset progress", font = game.assets.body),
         )
+        game.updater?.let { list += updateButton(it, cx) }
         if (confirmReset) {
             list += Button("reset_yes", cx - 330f, uiH / 2f - 170f, 310f, 96f, "Reset", layer = 1)
             list += Button("reset_no", cx + 20f, uiH / 2f - 170f, 310f, 96f, "Keep it", ButtonStyle.PRIMARY, layer = 1)
@@ -84,9 +87,30 @@ class SettingsScreen(game: Pawtillery) : BaseScreen(game) {
         return list
     }
 
+    /** Check for updates, or install one that's ready (test builds only). */
+    private fun updateButton(u: Updater, cx: Float): Button {
+        val ready = u.state == Updater.State.READY
+        val busy = u.state == Updater.State.CHECKING || u.state == Updater.State.DOWNLOADING
+        val label = when (u.state) {
+            Updater.State.READY -> "Install update"
+            Updater.State.CHECKING -> "Checking..."
+            Updater.State.DOWNLOADING -> "Downloading ${(u.progress * 100).toInt()}%"
+            else -> "Check for updates"
+        }
+        val sub = when (u.state) {
+            Updater.State.READY -> "${u.available?.versionName} is ready"
+            Updater.State.UP_TO_DATE -> "You have the newest version"
+            Updater.State.FAILED -> u.message ?: "Try again later"
+            else -> "This is ${u.currentVersion}"
+        }
+        return Button("update", cx - 240f, 34f, 480f, 96f, label, if (ready) ButtonStyle.PRIMARY else ButtonStyle.LIGHT,
+            enabled = !busy, sublabel = sub, font = game.assets.body)
+    }
+
     override fun onButton(id: String) {
         val st = game.settings
         when (id) {
+            "update" -> game.updater?.let { if (it.state == Updater.State.READY) it.install() else it.check(game.clock) }
             "music" -> {
                 st.music = !st.music
                 game.refreshMusic()

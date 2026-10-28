@@ -34,8 +34,9 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build the debug APK
-        run: ./gradlew :android:assembleDebug --console=plain
+      # The test APK (debug), plus the store version (release) to make sure it builds too.
+      - name: Build the APKs
+        run: ./gradlew :android:assembleDebug :android:assembleRelease :android:writeUpdateInfo --console=plain
       # Without libGDX's native libraries the app closes the moment it starts, so make sure every
       # phone architecture has them, along with the game's sounds, music and fonts.
       - name: Check the APK contents
@@ -52,6 +53,18 @@ jobs:
           done
           grep -E "lib/|assets/music" apk-contents.txt
           ls -l "$apk"
+      # Test builds update themselves from GitHub; Google Play doesn't allow that, so the store build
+      # must ask for neither internet access nor permission to install apps.
+      - name: Check only the test build can update itself
+        run: |
+          manifest() { { unzip -p "$1" AndroidManifest.xml | strings -e l; unzip -p "$1" AndroidManifest.xml | strings; } > "$2"; }
+          manifest android/build/outputs/apk/debug/*.apk debug-manifest.txt
+          manifest android/build/outputs/apk/release/*.apk release-manifest.txt
+          grep -q REQUEST_INSTALL_PACKAGES debug-manifest.txt || { echo "The test build can't install its updates"; exit 1; }
+          if grep -E "REQUEST_INSTALL_PACKAGES|permission.INTERNET" release-manifest.txt; then
+            echo "The store build must not be able to install updates or go online"; exit 1
+          fi
+          cat android/build/outputs/update-info.json
       - uses: actions/upload-artifact@v4
         with:
           name: pawtillery-debug-apk
@@ -66,7 +79,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/build/outputs/apk/debug/*.apk pawtillery.apk
+          # update.json: installed test builds read it to find out about this one.
+          python3 - <<'PY'
+          import json, os, subprocess
+          info = json.load(open("android/build/outputs/update-info.json"))
+          info["apk"] = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/latest-build/pawtillery.apk"
+          info["notes"] = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
+          json.dump(info, open("update.json", "w"), indent=2)
+          PY
+          cat update.json
           gh release delete latest-build --cleanup-tag --yes || true
-          gh release create latest-build pawtillery.apk --prerelease --target "$GITHUB_SHA" \
+          gh release create latest-build pawtillery.apk update.json --prerelease --target "$GITHUB_SHA" \
             --title "Latest build" \
             --notes "Test build of Pawtillery from commit $GITHUB_SHA. Open pawtillery.apk on an Android phone (8.0 or newer) to install it."

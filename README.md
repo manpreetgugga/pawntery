@@ -17,6 +17,12 @@ Every test build is signed with that same key, so a newer APK installs straight 
 
 The same APK is also kept for 90 days as the **pawtillery-debug-apk** artifact (a zip) on each Actions run.
 
+### Automatic updates (test builds)
+
+Once a test build is on the phone, it keeps itself up to date. Each time the menu opens (at most every half hour) it looks at `update.json` in the **Latest build** release. When GitHub has built a newer version, the game downloads it in the background, shows a progress bar on the menu and then offers **New version ready! Install / Later**. Android's installer asks once more before anything is installed; the very first time, Android also asks you to allow Pawtillery to install apps. Treats, pets and stars are kept. *Settings > Check for updates* checks right away.
+
+Each GitHub build is numbered (`1.0.0 (test build N)`), and only a higher number counts as newer. This lives only in the test builds (`android/src/debug`): the Google Play version has no internet access and no install permission (the build checks this every time), because Play updates store apps itself and doesn't allow apps to update themselves. Builds from before this feature can't update themselves: install the latest one by hand once.
+
 Or build it yourself in Android Studio (see [Build the Android app](#build-the-android-app)).
 
 ## What makes it different
@@ -82,7 +88,7 @@ Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 
 | Folder | What's in it |
 |---|---|
 | `core/` | The whole game in Kotlin with libGDX + Box2D: rules (`Match.kt`), computer player, drawing, screens |
-| `android/` | Android launcher, manifest, icon |
+| `android/` | Android launcher, manifest, icon; `src/debug` holds the test builds' self-updater, `src/release` the store version's launcher setup |
 | `lwjgl3/` | Desktop window for quick testing on a computer (`./gradlew :lwjgl3:run`) |
 | `assets/` | Fonts, sound effects and music shared by both |
 | `store/` | Play Store icon, feature graphic, screenshots and listing text (`./gradlew -p tools/desktop-build :lwjgl3:storeAssets` redraws the icons and feature graphic) |
@@ -108,7 +114,7 @@ No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-b
 ## Honest notes
 
 - This project was built in a cloud environment that cannot download Google's Android build tools, so the Android app itself was never built there. The GitHub Actions workflow builds it on GitHub's machines; check that its *Android APK* job is green.
-- The game logic, physics, computer player, levels and money rules are covered by 39 unit tests, and every screen was checked with screenshots from the desktop test build.
+- The game logic, physics, computer player, levels and money rules are covered by 47 unit tests, and every screen was checked with screenshots from the desktop test build.
 - All art is drawn in code and all sound and music is synthesized. They are consistent and light (the whole game is under 1 MB of assets), but a professional artist and composer would lift it further.
 - The store and ad code for Android in `docs/MONETIZATION.md` is written but not yet compiled; Android Studio will point out anything that changed in Google's libraries.
 

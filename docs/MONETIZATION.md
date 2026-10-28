@@ -18,7 +18,7 @@ The game never talks to Google Play or AdMob directly. It uses one small interfa
 - `rewardedAdReady`, `showRewardedAd`: the optional ad.
 - `openUrl`: for the privacy policy link.
 
-Today the Android app uses `OfflinePlatform`. **The Shop shows "Coming soon" and the ad button stays hidden**, so the game is complete and safe to publish before any accounts exist. The desktop test build uses `DemoPlatform`, which pretends to sell Plus and show ads so every screen can be tried.
+Today the Android store build uses `OfflinePlatform` (from `launcherPlatform` in `android/src/release/kotlin/com/pawtillery/game/android/LauncherPlatform.kt`). **The Shop shows "Coming soon" and the ad button stays hidden**, so the game is complete and safe to publish before any accounts exist. The desktop test build uses `DemoPlatform`, which pretends to sell Plus and show ads so every screen can be tried.
 
 Already done inside the game:
 
@@ -39,10 +39,11 @@ Already done inside the game:
    ```xml
    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-XXXXXXXX~YYYYYYYY" />
    ```
-5. Add `AndroidPlatform.kt` (below) next to `AndroidLauncher.kt` and start the game with it:
+5. Add `AndroidPlatform.kt` (below) next to `AndroidLauncher.kt` and return it from the store build's `launcherPlatform` in `android/src/release/kotlin/com/pawtillery/game/android/LauncherPlatform.kt`:
    ```kotlin
-   initialize(Pawtillery(AndroidPlatform(this)), config)
+   fun launcherPlatform(activity: AndroidApplication): Platform = AndroidPlatform(activity)
    ```
+   Billing and ads also need `<uses-permission android:name="android.permission.INTERNET" />` in `android/AndroidManifest.xml`; then remove `|permission.INTERNET` from the "Check only the test build can update itself" step in `.github/workflows/build.yml`, which keeps the store build offline until then. The store build must never get `REQUEST_INSTALL_PACKAGES`: Play updates it.
 6. Upload a build to the *Internal testing* track, add yourself as a license tester, and buy Plus with a test card.
 
 > The code below was written against Play Billing 7 and Google Mobile Ads 23 and **has not been compiled in this repository**. This build environment can't download Google's Android libraries. Android Studio will flag anything that changed in newer versions.

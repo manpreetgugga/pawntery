@@ -17,6 +17,7 @@ import com.pawtillery.game.ItemType
 import com.pawtillery.game.MatchConfig
 import com.pawtillery.game.MatchSetup
 import com.pawtillery.game.MenuScreen
+import com.pawtillery.game.Updater
 import com.pawtillery.game.PetKind
 import com.pawtillery.game.Side
 import com.pawtillery.game.Pawtillery
@@ -181,8 +182,24 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         }
         myTurns += {
             shot("39-later")
-            at(time + 0.2f) { Gdx.app.exit() }
+            at(time + 0.2f) { updateTour() }
         }
+    }
+
+    /** Test builds updating themselves, with a pretend GitHub. */
+    private fun updateTour() {
+        val dir = File(outDir, "update-demo").apply { deleteRecursively() }
+        game.updater = Updater(DemoSelfUpdate(dir), DemoFetch())
+        game.switchTo(MenuScreen(game))
+        at(time + 1.2f) { shot("40-update-downloading") }
+        at(time + 3.0f) { shot("41-update-ready") }
+        at(time + 3.1f) { tap("update_install") }
+        at(time + 3.3f) { shot("42-update-install-tapped") }
+        at(time + 3.4f) { tap("update_later") }
+        at(time + 3.7f) { shot("43-update-later") }
+        at(time + 3.8f) { tap("settings") }
+        at(time + 4.4f) { shot("44-settings-update") }
+        at(time + 4.5f) { dir.deleteRecursively(); Gdx.app.exit() }
     }
 
     private fun autoThrow(item: ItemType) {

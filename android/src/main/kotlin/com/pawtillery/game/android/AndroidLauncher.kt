@@ -19,6 +19,7 @@ class AndroidLauncher : AndroidApplication() {
             useCompass = false
             numSamples = 2
         }
-        initialize(Pawtillery(), config)
+        // Test builds get a platform that updates itself from GitHub; store builds don't (src/debug, src/release).
+        initialize(Pawtillery(launcherPlatform(this)), config)
     }
 }
