@@ -16,6 +16,8 @@ enum class Trophy(val title: String, val description: String, val reward: Int) {
     FULL_HOUSE("Full House", "Unlock all five pets", 50),
     DAILY_REGULAR("Daily Regular", "Finish 5 daily challenges", 50),
     FAMILY_NIGHT("Family Night", "Play 3 two-player games", 20),
+    DEMOLITION("Demolition Crew", "Smash 5 fort pieces in one game", 30),
+    WRECKING_BALL("Wrecking Ball", "Smash 50 fort pieces in total", 50),
 }
 
 enum class GameKind { VS_COMPUTER, TWO_PLAYERS, TRICK_SHOT, DAILY }
@@ -30,6 +32,8 @@ class GameSummary(
     val hits: Int,
     val tricks: List<String>,
     val ownMess: Float,
+    /** The other side's fort pieces broken on the human player's turns. */
+    val smashed: Int = 0,
 )
 
 object Trophies {
@@ -52,6 +56,8 @@ object Trophies {
             Trophy.FULL_HOUSE to PetKind.entries.all { settings.isUnlocked(it) },
             Trophy.DAILY_REGULAR to (settings.dailiesDone >= 5),
             Trophy.FAMILY_NIGHT to (settings.twoPlayerGames >= 3),
+            Trophy.DEMOLITION to (summary.smashed >= 5),
+            Trophy.WRECKING_BALL to (settings.totalSmashed >= 50),
         )
         return Trophy.entries.filter { qualifies[it] == true && !settings.hasTrophy(it) }
     }

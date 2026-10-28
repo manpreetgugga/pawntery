@@ -16,7 +16,13 @@ import kotlin.random.Random
 /** One match: against the computer, two players sharing the phone, or (for demos) computer vs computer. */
 class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(game) {
 
-    private class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val maxLife: Float, val size: Float, val color: Color)
+    /** How a particle moves and looks: paint drops, tumbling debris, dust puffs, blast rings, sparks or confetti. */
+    private enum class Fx { DROP, CHUNK, PUFF, RING, SPARK, CONFETTI }
+
+    private class Particle(
+        var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val maxLife: Float, val size: Float, val color: Color,
+        val kind: Fx = Fx.DROP, var angle: Float = 0f, var spin: Float = 0f, val h: Float = size,
+    )
 
     private class Popup(val text: String, var x: Float, var y: Float, val color: Color, var life: Float, val big: Boolean)
 
@@ -67,6 +73,11 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
     private var gameNumber = 0
     private var unlockable: PetKind? = null
     private val humans = Side.entries.filter { it !in setup.computer }
+
+    /** Whether each pet's umbrella was up last frame, to puff it away when it folds. */
+    private val umbrellaUp = BooleanArray(2)
+    /** A quick white flash for the paint bomb. */
+    private var flash = 0f
 
     private val obstacles = ArrayList<Rectangle>()
     private val bounds = Rectangle()
@@ -141,7 +152,18 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         for (e in events) onEvent(e)
         events.clear()
         updateComputer(dt)
+        emitTrails()
+        for (side in Side.entries) {
+            val up = match.hasUmbrella(side)
+            if (umbrellaUp[side.ordinal] && !up) {
+                val pos = umbrellaPos(side, tmp)
+                puffs(pos.x, pos.y, 6, Palette.WHITE, 0.5f)
+                game.sfx("pop", 0.6f, 1.4f)
+            }
+            umbrellaUp[side.ordinal] = up
+        }
         updateEffects(dt)
+        flash = max(0f, flash - realDt * 3f)
         updateHeldButton(realDt)
         for (i in hop.indices) if (hop[i] > 0f) hop[i] -= dt
         for (i in voiceCooldown.indices) if (voiceCooldown[i] > 0f) voiceCooldown[i] -= realDt
@@ -188,7 +210,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             Phase.AIM -> {
                 computerTimer += dt
                 if (computerPlan == null && computerTimer > 0.55f) {
-                    val plan = computer.planShot(match, side)
+                    val plan = computer.takeTurn(match, side)
                     computerPlan = plan
                     selectedItem[side.ordinal] = plan.item
                 }
@@ -203,8 +225,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 }
             }
             Phase.FLIGHT -> {
-                val splitter = match.activeSplitter
-                if (computerPlan?.splitAtApex == true && splitter != null && splitter.body.linearVelocity.y < 0f) match.splitActive()
+                val target = match.tapTarget
+                if (computerPlan?.splitAtApex == true && target != null && target.body.linearVelocity.y < 0f) match.tap()
             }
             else -> Unit
         }
@@ -263,21 +285,31 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 game.sfx("splat", 0.9f, 0.85f + MathUtils.random(0.3f))
                 burst(e.x, e.y, Art.splatColor(e.item), 9, 4f)
             }
-            is MatchEvent.Burst -> {
-                game.sfx("pop")
-                burst(e.x, e.y, Palette.WATER, 18, 6f)
-                shake = max(shake, 0.15f)
+            is MatchEvent.Burst -> onBurst(e)
+            is MatchEvent.PieceBroken -> onPieceBroken(e)
+            is MatchEvent.PowerUsed -> {
+                game.sfx("powerup", 0.8f)
+                val pos = match.pet(e.side).body.position
+                popup(e.power.displayName + "!", pos.x, pos.y + Arena.PET_H + 1.6f, Palette.TEAL, 1.4f, true)
+            }
+            is MatchEvent.Blocked -> {
+                game.sfx("boing", 0.9f, 1.2f)
+                game.buzz(20)
+                val pos = umbrellaPos(e.side, tmp)
+                popup("Blocked!", pos.x, pos.y + 1.2f, Palette.GOLD, 1.4f, true)
+                burst(pos.x, pos.y + 0.8f, Palette.WHITE, 10, 4f)
             }
             is MatchEvent.PetHit -> {
                 val amount = e.amount.roundToInt()
                 game.sfx("bonk", 0.7f, 0.9f + MathUtils.random(0.25f))
                 if (amount >= 4) petVoice(e.side)
                 game.buzz(if (amount >= 12) 60 else 25)
-                if (amount >= 2) popups.add(Popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false))
+                if (amount >= 2) popup("+$amount", e.x, e.y + 0.7f, Palette.BAD, 1.2f, false)
                 when {
-                    e.trick != null -> popups.add(Popup(e.trick, e.x, e.y + 2.1f, Palette.GOLD, 1.6f, true))
-                    e.item == null && amount >= 3 -> popups.add(Popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true))
-                    amount >= 14 -> popups.add(Popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true))
+                    e.trick != null -> popup(e.trick, e.x, e.y + 2.1f, Palette.GOLD, 1.6f, true)
+                    e.item == null && amount >= 3 -> popup("Bonk!", e.x, e.y + 2.1f, Palette.WHITE, 1f, true)
+                    // Watermelons, fireworks and paint bombs already shout their own word.
+                    amount >= 14 && (e.item?.burst == null || e.item == ItemType.WATER) -> popup(HIT_WORDS.random(), e.x, e.y + 2.1f, Palette.GOLD, 1.3f, true)
                 }
                 shake = max(shake, 0.25f)
                 if (match.pet(e.side).mess >= Arena.MESS_TO_LOSE && slowMotion <= 0f) slowMotion = 1.3f
@@ -319,6 +351,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             hits = humans.sumOf { match.stats(it).hits },
             tricks = humans.flatMap { match.tricks(it) },
             ownMess = match.pet(first).mess,
+            smashed = humans.sumOf { match.stats(it).smashed },
         )
         val settings = game.settings
         settings.recordStats(summary)
@@ -349,8 +382,19 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         }
         val hits = humans.sumOf { match.stats(it).hits }
         val tricks = humans.sumOf { match.stats(it).tricks }
+        val smashed = humans.sumOf { match.stats(it).smashed }
         val factor = if (humans.size == 1) setup.level.treatFactor else 1f
-        treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, hits, tricks, factor)
+        treatsEarned = game.settings.recordGame(result, setup.throwsPerPlayer, hits, tricks, factor, smashed)
+    }
+
+    /** Shows a word over the backyard, moved up above any word still showing in the same spot. */
+    private fun popup(text: String, x: Float, y: Float, color: Color, life: Float, big: Boolean) {
+        var py = y
+        for (i in 0 until 4) {
+            if (popups.none { abs(it.x - x) < 2.4f && abs(it.y - py) < 0.8f && it.life > 0.35f }) break
+            py += 0.85f
+        }
+        popups.add(Popup(text, x, py, color, life, big))
     }
 
     private fun banner(title: String, sub: String) {
@@ -373,11 +417,174 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         }
     }
 
+    /** Water balloons, watermelons, fireworks and paint bombs each go off in their own way. */
+    private fun onBurst(e: MatchEvent.Burst) {
+        when (e.item) {
+            ItemType.MELON -> {
+                game.sfx("squish")
+                game.sfx("splat", 0.8f, 0.7f)
+                burst(e.x, e.y, Palette.MELON_FLESH, 22, 7f)
+                chunks(e.x, e.y, 0f, 0f, 9, listOf(Palette.MELON_FLESH, Palette.MELON_RIND, Palette.MELON_FLESH), 0.14f, 0.3f)
+                burst(e.x, e.y, Palette.MELON_SEED, 8, 5f)
+                ring(e.x, e.y, e.radius * 0.8f, Palette.MELON_FLESH)
+                popup("Splosh!", e.x, e.y + 1.4f, Palette.WHITE, 1.1f, true)
+                shake = max(shake, 0.3f)
+            }
+            ItemType.FIREWORK -> {
+                game.sfx("crackle")
+                game.sfx("pop", 0.7f, 1.3f)
+                ring(e.x, e.y, e.radius * 0.85f, Palette.GOLD)
+                repeat(40) {
+                    val a = MathUtils.random(360f)
+                    val v = MathUtils.random(2.5f, 9f)
+                    val life = MathUtils.random(0.9f, 1.6f)
+                    particles.add(Particle(e.x, e.y, MathUtils.cosDeg(a) * v, MathUtils.sinDeg(a) * v, life, life, 0.14f, Palette.PAINTS.random(), Fx.CONFETTI, MathUtils.random(360f), MathUtils.random(-600f, 600f), 0.08f))
+                }
+                repeat(24) {
+                    val a = it * 15f
+                    val v = MathUtils.random(6f, 10f)
+                    particles.add(Particle(e.x, e.y, MathUtils.cosDeg(a) * v, MathUtils.sinDeg(a) * v, 0.45f, 0.45f, 0.09f, if (it % 2 == 0) Palette.GOLD else Palette.WHITE, Fx.SPARK))
+                }
+                popup("Pop!", e.x, e.y + 1.4f, Palette.GOLD, 1.1f, true)
+                shake = max(shake, 0.35f)
+                game.buzz(40)
+            }
+            ItemType.PAINT_BOMB -> {
+                game.sfx("kaboom")
+                flash = 0.3f
+                ring(e.x, e.y, e.radius, Palette.WHITE)
+                ring(e.x, e.y, e.radius * 0.7f, Palette.PAINTS[0])
+                for (c in Palette.PAINTS) {
+                    repeat(14) {
+                        val a = MathUtils.random(0f, 180f)
+                        val v = MathUtils.random(4f, 13f)
+                        val life = MathUtils.random(0.6f, 1.1f)
+                        particles.add(Particle(e.x, e.y, MathUtils.cosDeg(a) * v, MathUtils.sinDeg(a) * v, life, life, MathUtils.random(0.1f, 0.24f), c))
+                    }
+                    puffs(e.x, e.y, 1, c, 0.6f)
+                }
+                puffs(e.x, e.y + 0.3f, 2, Palette.WHITE, 0.5f)
+                popup("Kaboom!", e.x, e.y + 1.8f, Palette.GOLD, 1.5f, true)
+                shake = max(shake, 0.75f)
+                game.buzz(90)
+            }
+            else -> {
+                game.sfx("pop")
+                burst(e.x, e.y, Palette.WATER, 18, 6f)
+                shake = max(shake, 0.15f)
+            }
+        }
+    }
+
+    /** A fort piece falls apart: chunks in its colors, a puff of dust and a crunch. */
+    private fun onPieceBroken(e: MatchEvent.PieceBroken) {
+        val colors = when (e.type) {
+            PieceType.BOX -> listOf(Palette.BOX, Palette.BOX_DARK, Palette.TAPE)
+            PieceType.CRATE -> listOf(Palette.CRATE, Palette.CRATE_DARK, Palette.CRATE)
+            PieceType.PLANK -> listOf(Palette.PLANK, Palette.PLANK_DARK)
+            PieceType.POT -> listOf(Palette.POT, Palette.POT_DARK, Palette.MUD, Palette.LEAF, Palette.FLOWER)
+            PieceType.GNOME -> listOf(Palette.GNOME_BODY, Palette.GNOME_HAT, Palette.GNOME_FACE, Palette.WHITE)
+            PieceType.TIRE -> listOf(Palette.TIRE, Palette.TIRE_INNER, Palette.HUB)
+        }
+        val wood = e.type == PieceType.BOX || e.type == PieceType.CRATE || e.type == PieceType.PLANK
+        val count = (12 + (e.type.w * e.type.h) * 6f).toInt().coerceAtMost(20)
+        chunks(e.x, e.y, e.vx, e.vy, count, colors, if (wood) 0.16f else 0.14f, if (wood) 0.55f else 0.3f)
+        puffs(e.x, e.y, 3, DUST, 0.45f)
+        when (e.type) {
+            PieceType.POT, PieceType.GNOME -> game.sfx("shatter", 0.9f, 0.9f + MathUtils.random(0.2f))
+            PieceType.TIRE -> game.sfx("boing", 0.9f, 0.6f)
+            else -> game.sfx("crash", 0.9f, 0.9f + MathUtils.random(0.2f))
+        }
+        val word = when (e.type) {
+            PieceType.BOX -> "Crunch!"
+            PieceType.CRATE -> "Crash!"
+            PieceType.PLANK -> "Snap!"
+            PieceType.TIRE -> "Pop!"
+            else -> "Smash!"
+        }
+        popup(word, e.x, e.y + 0.9f, Palette.WHITE, 1f, false)
+        shake = max(shake, 0.25f)
+        game.buzz(30)
+    }
+
+    /** Tumbling pieces of something that broke, flung out of the way it was moving. */
+    private fun chunks(x: Float, y: Float, vx: Float, vy: Float, count: Int, colors: List<Color>, minSize: Float, maxSize: Float) {
+        repeat(count) {
+            val w = MathUtils.random(minSize, maxSize)
+            val life = MathUtils.random(1.8f, 2.8f)
+            particles.add(Particle(
+                x + MathUtils.random(-0.4f, 0.4f), y + MathUtils.random(-0.3f, 0.3f),
+                vx * 0.4f + MathUtils.random(-4.5f, 4.5f), vy * 0.3f + MathUtils.random(2f, 7.5f),
+                life, life, w, colors[it % colors.size], Fx.CHUNK, MathUtils.random(360f), MathUtils.random(-720f, 720f), w * MathUtils.random(0.35f, 0.8f),
+            ))
+        }
+    }
+
+    private fun puffs(x: Float, y: Float, count: Int, color: Color, size: Float) {
+        repeat(count) {
+            val life = MathUtils.random(0.5f, 0.9f)
+            particles.add(Particle(x + MathUtils.random(-0.5f, 0.5f), y + MathUtils.random(-0.3f, 0.4f), MathUtils.random(-1.2f, 1.2f), MathUtils.random(0.2f, 1.2f), life, life, size * MathUtils.random(0.7f, 1.2f), color, Fx.PUFF))
+        }
+    }
+
+    private fun ring(x: Float, y: Float, radius: Float, color: Color) {
+        particles.add(Particle(x, y, 0f, 0f, 0.35f, 0.35f, radius, color, Fx.RING))
+    }
+
+    /** Fireworks leave a trail of sparks. */
+    private fun emitTrails() {
+        if (paused) return
+        for (p in match.projectiles) {
+            if (p.item != ItemType.FIREWORK) continue
+            val v = p.body.linearVelocity
+            val len = v.len()
+            if (len < 0.1f) continue
+            val tx = p.body.position.x - v.x / len * p.radius * 1.8f
+            val ty = p.body.position.y - v.y / len * p.radius * 1.8f
+            val life = MathUtils.random(0.2f, 0.4f)
+            particles.add(Particle(tx, ty, -v.x * 0.08f + MathUtils.random(-0.6f, 0.6f), -v.y * 0.08f + MathUtils.random(-0.6f, 0.6f), life, life, 0.07f,
+                if (MathUtils.randomBoolean()) Palette.GOLD else Palette.ACCENT, Fx.SPARK))
+        }
+    }
+
+    /** Where [side]'s umbrella opens: in front of and above its pet. */
+    private fun umbrellaPos(side: Side, out: Vector2): Vector2 =
+        out.set(Arena.petX(side) + side.dir * 0.35f, Arena.GROUND_Y + Arena.PET_H + 0.75f)
+
     private fun updateEffects(dt: Float) {
+        if (particles.size > MAX_PARTICLES) particles.subList(0, particles.size - MAX_PARTICLES).clear()
         val pi = particles.iterator()
         while (pi.hasNext()) {
             val p = pi.next()
-            p.vy -= 12f * dt
+            when (p.kind) {
+                Fx.DROP -> p.vy -= 12f * dt
+                Fx.CHUNK -> {
+                    p.vy -= 14f * dt
+                    p.angle += p.spin * dt
+                    // Bounce and skid on the grass.
+                    if (p.y - p.h / 2f < Arena.GROUND_Y && p.vy < 0f) {
+                        p.y = Arena.GROUND_Y + p.h / 2f
+                        p.vy = -p.vy * 0.3f
+                        p.vx *= 0.55f
+                        p.spin *= 0.4f
+                    }
+                }
+                Fx.CONFETTI -> {
+                    p.vy -= 3f * dt
+                    p.vx *= 1f - 1.8f * dt
+                    p.vy *= 1f - 1.8f * dt
+                    p.angle += p.spin * dt
+                }
+                Fx.SPARK -> {
+                    p.vx *= 1f - 3f * dt
+                    p.vy *= 1f - 3f * dt
+                }
+                Fx.PUFF -> {
+                    p.vx *= 1f - 2f * dt
+                    p.vy *= 1f - 2f * dt
+                }
+                Fx.RING -> Unit
+            }
             p.x += p.vx * dt
             p.y += p.vy * dt
             p.life -= dt
@@ -404,7 +611,7 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 dragMoved = false
                 dragStart.set(ui)
             }
-            Phase.FLIGHT -> if (isHuman(side) && match.activeSplitter != null) match.splitActive()
+            Phase.FLIGHT -> if (isHuman(side) && match.tapTarget != null) match.tap()
             else -> Unit
         }
     }
@@ -447,11 +654,15 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         aimAngle[side.ordinal] = (atan2(dy, dx * side.dir) * MathUtils.radiansToDegrees).coerceIn(0f, 85f).roundToInt().toFloat()
     }
 
-    /** For automated UI tours: aims the current player's throw as a sharp computer player would, and throws it. */
-    fun devAutoThrow() {
+    /** For automated UI tours: whether a person is lining up a throw right now. */
+    val isHumanAiming: Boolean get() = humanAiming
+
+    /** For automated UI tours: aims the current player's throw (with [item], if given) as a sharp computer player would, and throws it. */
+    fun devAutoThrow(item: ItemType? = null) {
         if (!humanAiming) return
         val side = match.turn
-        val plan = ComputerPlayer(Random(1), ComputerLevel.CHAMPION).planShot(match, side)
+        val ai = ComputerPlayer(Random(1), ComputerLevel.CHAMPION)
+        val plan = if (item != null) ai.aimWith(match, side, item) else ai.planShot(match, side)
         selectedItem[side.ordinal] = plan.item
         aimAngle[side.ordinal] = atan2(plan.vy, abs(plan.vx)) * MathUtils.radiansToDegrees
         aimPower[side.ordinal] = Vector2.len(plan.vx, plan.vy) / Arena.MAX_SPEED
@@ -522,6 +733,20 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 selectedItem[match.turn.ordinal] = item
                 hint(item.hint)
             }
+            id.startsWith("power:") -> if (humanAiming) {
+                val p = PowerUp.valueOf(id.removePrefix("power:"))
+                val wasArmed = match.isArmed(match.turn, p)
+                if (match.usePower(p)) {
+                    when {
+                        wasArmed -> hint("${p.displayName} is off")
+                        p == PowerUp.MEGA || p == PowerUp.TRIPLE -> {
+                            game.sfx("powerup", 0.6f, 1.2f)
+                            hint(p.hint)
+                        }
+                        else -> hint(p.hint)
+                    }
+                }
+            }
         }
     }
 
@@ -557,6 +782,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         unlockable = null
         particles.clear()
         popups.clear()
+        umbrellaUp.fill(false)
+        flash = 0f
         buildQueue.clear()
         selectedItem.fill(ItemType.MUD)
         dragging = false
@@ -598,15 +825,18 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         if (match.phase == Phase.BUILD && isHuman(match.turn) && buildQueue.isEmpty()) drawBuildZone()
         for (p in match.pieces) Art.piece(s, p)
         for (p in match.pets.values) Art.pet(s, p, match.time, hopLift(p.side))
+        for (side in Side.entries) {
+            if (!match.hasUmbrella(side)) continue
+            val pos = umbrellaPos(side, tmp)
+            Art.umbrella(s, pos.x, pos.y, side.dir, match.time + side.ordinal)
+        }
         for (p in match.projectiles) Art.projectile(s, p)
         drawGhost()
         drawAim()
         drawTurnMarker()
-        for (p in particles) {
-            s.color = tmpColor.set(p.color).also { it.a *= min(1f, p.life / p.maxLife * 1.5f) }
-            s.circle(p.x, p.y, p.size, 8)
-        }
+        drawParticles()
         s.end()
+        if (flash > 0f) shadeScreen(tmpColor.set(1f, 1f, 1f, min(0.5f, flash)))
 
         buttons = layoutButtons()
         beginUiShapes()
@@ -630,6 +860,39 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             batch.end()
         }
         drawToast()
+    }
+
+    private fun drawParticles() {
+        val s = shapes
+        for (p in particles) {
+            val fade = min(1f, p.life / p.maxLife * 1.5f)
+            s.color = tmpColor.set(p.color).also { it.a *= fade }
+            when (p.kind) {
+                Fx.DROP, Fx.SPARK -> s.circle(p.x, p.y, p.size, 8)
+                Fx.CHUNK, Fx.CONFETTI -> s.rect(p.x - p.size / 2f, p.y - p.h / 2f, p.size / 2f, p.h / 2f, p.size, p.h, 1f, 1f, p.angle)
+                Fx.PUFF -> {
+                    val grow = 1f + 1.2f * (1f - p.life / p.maxLife)
+                    s.color = tmpColor.set(p.color).also { it.a *= 0.55f * fade }
+                    s.circle(p.x, p.y, p.size * grow, 16)
+                }
+                Fx.RING -> {
+                    val k = 1f - p.life / p.maxLife
+                    val r = p.size * (0.25f + 0.75f * k)
+                    val width = 0.28f * (1f - k) + 0.04f
+                    s.color = tmpColor.set(p.color).also { it.a *= 0.9f * (1f - k) }
+                    var prevX = p.x + r
+                    var prevY = p.y
+                    for (i in 1..32) {
+                        val a = i * 360f / 32f
+                        val nx = p.x + MathUtils.cosDeg(a) * r
+                        val ny = p.y + MathUtils.sinDeg(a) * r
+                        s.rectLine(prevX, prevY, nx, ny, width)
+                        prevX = nx
+                        prevY = ny
+                    }
+                }
+            }
+        }
     }
 
     /** "Trophy earned" card that slides down from the top after a game. */
@@ -763,9 +1026,17 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             s.rectLine(origin.x, origin.y, tipX, tipY, 0.12f)
             s.triangle(tipX + nx * 0.32f, tipY + ny * 0.32f, tipX - ny * 0.22f, tipY + nx * 0.22f, tipX + ny * 0.22f, tipY - nx * 0.22f)
         }
+        val r = item.radius * if (match.isArmed(side, PowerUp.MEGA)) Projectile.MEGA_SCALE else 1f
+        if (match.isArmed(side, PowerUp.TRIPLE)) {
+            for (dx in floatArrayOf(-1f, 1f)) {
+                s.identity()
+                s.translate(origin.x + dx * r * 1.3f, origin.y + r * 0.9f, 0f)
+                Art.itemShape(s, item, r * 0.8f)
+            }
+        }
         s.identity()
         s.translate(origin.x, origin.y, 0f)
-        Art.itemShape(s, item, item.radius)
+        Art.itemShape(s, item, r)
         s.identity()
         if (isHuman(side) && !dragging && !game.settings.aimTipSeen) drawAimTip(origin)
     }
@@ -852,8 +1123,31 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         if (match.phase == Phase.AIM && isHuman(side)) {
             addItemTray(list, side)
             addAimControls(list)
+            addPowerPad(list, side)
         }
         return list
+    }
+
+    /**
+     * Power-ups, two by two in the back corner of the player's own yard. Calm only shows when the
+     * match has wind.
+     */
+    private fun addPowerPad(list: MutableList<Button>, side: Side) {
+        val powers = PowerUp.entries.filter { p -> p != PowerUp.CALM || !match.config.easyMode }
+        if (powers.none { match.powersLeft(side, it) > 0 || match.isArmed(side, it) || (it == PowerUp.UMBRELLA && match.hasUmbrella(side)) }) return
+        val w = 96f
+        val h = 110f
+        val gap = 10f
+        val x0 = if (side == Side.LEFT) 20f else uiW - 20f - 2 * w - gap
+        val y0 = if (side == Side.LEFT) 166f else AIM_PANEL_Y + AIM_PANEL_H + 20f
+        for ((i, p) in powers.withIndex()) {
+            val x = x0 + (i % 2) * (w + gap)
+            val y = y0 + (1 - i / 2) * (h + gap)
+            val armed = match.isArmed(side, p) || (p == PowerUp.UMBRELLA && match.hasUmbrella(side))
+            list += Button("power:${p.name}", x, y, w, h, p.displayName,
+                enabled = match.canUsePower(p) || match.isArmed(side, p), selected = armed,
+                icon = { s, cx, cy, sz -> Art.powerIcon(s, p, cx, cy + 2f, sz * 1.12f) })
+        }
     }
 
     private fun addBuildTray(list: MutableList<Button>, side: Side) {
@@ -896,16 +1190,23 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
 
     private fun addItemTray(list: MutableList<Button>, side: Side) {
         val items = match.items(side)
-        val bw = 170f
+        val gap = 10f
+        // Up to seven items share the strip between the pause button and the aim panel.
+        val bw = min(170f, (aimPanelX - 20f - 130f - gap * (items.size - 1)) / items.size)
         val bh = 124f
-        val gap = 12f
         var x = 130f
         for (item in items) {
             val n = match.count(side, item)
             list += Button("item:${item.name}", x, 24f, bw, bh, item.displayName,
                 enabled = n != 0, selected = item == selectedItem[side.ordinal],
                 badge = if (n < 0) "∞" else "x$n",
-                icon = { s, cx, cy, size -> icon(cx, cy - 2f, size * 0.42f / item.radius) { Art.itemShape(s, item, item.radius) } })
+                icon = { s, cx, cy, size ->
+                    icon(cx, cy - 2f, size * 0.42f / Art.iconRadius(item)) {
+                        // The rocket points up and away, the way it flies.
+                        if (item == ItemType.FIREWORK) s.rotate(0f, 0f, 1f, 35f)
+                        Art.itemShape(s, item, item.radius)
+                    }
+                })
             x += bw + gap
         }
     }
@@ -1052,8 +1353,9 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
             Ui.text(batch, a.small, "POWER", x, AIM_PANEL_Y + 60f, Palette.INK, 0.6f)
             Ui.text(batch, a.h2, "${(aimPower[side.ordinal] * 100).roundToInt()}%", x, AIM_PANEL_Y + 34f, Palette.INK)
         }
-        if (match.phase == Phase.FLIGHT && isHuman(side) && match.activeSplitter != null) {
-            Ui.text(batch, a.label, "Tap to split!", uiW / 2f, uiH * 0.5f, Palette.WHITE)
+        val tapTarget = match.tapTarget
+        if (match.phase == Phase.FLIGHT && isHuman(side) && tapTarget != null) {
+            Ui.text(batch, a.label, if (tapTarget.item.popsOnTap) "Tap to pop!" else "Tap to split!", uiW / 2f, uiH * 0.4f, Palette.WHITE)
         }
         if (match.phase == Phase.AIM && ((dragging && dragMoved) || computerAiming)) {
             val launch = Arena.launchPoint(side, tmp2)
@@ -1164,7 +1466,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
                 1 -> "  ·  1 trick shot"
                 else -> "  ·  ${st.tricks} trick shots"
             }
-            Ui.text(batch, a.body, "$who ${st.hits} of ${st.throws} throws hit$trickText", cx, y, Palette.INK, 0.8f)
+            val smashText = if (st.smashed > 0) "  ·  ${st.smashed} smashed" else ""
+            Ui.text(batch, a.body, "$who ${st.hits} of ${st.throws} throws hit$trickText$smashText", cx, y, Palette.INK, 0.8f, 780f)
             y -= 38f
         }
         val next = unlockable
@@ -1220,6 +1523,8 @@ class GameScreen(game: Pawtillery, private val setup: MatchSetup) : BaseScreen(g
         const val AIM_PANEL_H = 150f
         const val AIM_PANEL_Y = 18f
         const val TOAST_TIME = 2.8f
+        const val MAX_PARTICLES = 700
+        val DUST: Color = Color.valueOf("F5EBD6")
         val NUDGE_IDS = setOf("angle-", "angle+", "power-", "power+")
         val HIT_WORDS = listOf("Splat!", "Gotcha!", "Bullseye!", "Yuck!", "Messy!")
     }

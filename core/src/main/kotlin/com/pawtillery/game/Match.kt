@@ -45,15 +45,21 @@ sealed interface MatchEvent {
     data class Thrown(val side: Side, val item: ItemType) : MatchEvent
     data class Split(val x: Float, val y: Float) : MatchEvent
     data class Splat(val x: Float, val y: Float, val item: ItemType) : MatchEvent
-    data class Burst(val x: Float, val y: Float) : MatchEvent
+    /** A water balloon, watermelon, firework or paint bomb going off, reaching [radius] meters. */
+    data class Burst(val x: Float, val y: Float, val item: ItemType, val radius: Float) : MatchEvent
     /** [item] is null when a falling fort piece did the damage; [trick] names a skill shot. */
     data class PetHit(val side: Side, val amount: Float, val x: Float, val y: Float, val item: ItemType?, val trick: String? = null) : MatchEvent
     data class Thud(val strength: Float, val tire: Boolean) : MatchEvent
+    /** A fort piece took one knock too many and fell apart; [vx], [vy] is how it was moving. */
+    data class PieceBroken(val side: Side, val type: PieceType, val x: Float, val y: Float, val angle: Float, val vx: Float, val vy: Float) : MatchEvent
+    data class PowerUsed(val side: Side, val power: PowerUp) : MatchEvent
+    /** [side]'s umbrella caught a hit meant for its pet. */
+    data class Blocked(val side: Side, val x: Float, val y: Float) : MatchEvent
     data class GameOver(val winner: Side?) : MatchEvent
 }
 
-/** How one player's throws went. */
-data class ThrowStats(val throws: Int, val hits: Int, val tricks: Int)
+/** How one player's throws went; [smashed] counts the other side's fort pieces broken on this player's turns. */
+data class ThrowStats(val throws: Int, val hits: Int, val tricks: Int, val smashed: Int = 0)
 
 /**
  * One game: the Box2D world plus the rules (build phase, turns, wind, inventories, mess, winning).
@@ -84,17 +90,28 @@ class Match(val config: MatchConfig) : Disposable {
     var time = 0f
         private set
 
-    /** A thrown item that can still be split by tapping (hairball, seed shower), if one is in the air. */
-    var activeSplitter: Projectile? = null
-        private set
+    /** Thrown items that still react to a tap: hairballs and seed showers split, fireworks pop. */
+    private val tappables = ArrayList<Projectile>()
+
+    /** The first item in the air that a tap would split or pop, if any. */
+    val tapTarget: Projectile? get() = tappables.firstOrNull { !it.dead }
 
     private val throwsDone = IntArray(2)
     private val throwsThatHit = IntArray(2)
     private val trickShots = IntArray(2)
     private val trickLog = Array(2) { ArrayList<String>() }
+    private val smashed = IntArray(2)
     private var throwHit = false
-    private var fragmentHits = 0
+    /** Split pieces or Triple items from this throw that hit the pet so far, for Double!/Triple! */
+    private var comboHits = 0
+    /** A throw earns one Sky pop! at most, even with three fireworks. */
+    private var skyPopped = false
     private val inventory = Array(2) { IntArray(ItemType.entries.size) }
+    private val powers = Array(2) { IntArray(PowerUp.entries.size) }
+    private val armed = Array(2) { BooleanArray(PowerUp.entries.size) }
+    private val umbrella = BooleanArray(2)
+    /** Set once an umbrella has caught something this turn; it folds away when the turn ends. */
+    private val umbrellaHit = BooleanArray(2)
     private val lastVelocity = arrayOfNulls<Vector2>(2)
     private val events = ArrayList<MatchEvent>()
     private val hits = ArrayList<Hit>()
@@ -122,6 +139,7 @@ class Match(val config: MatchConfig) : Disposable {
         if (challenge == null) {
             for (side in Side.entries) {
                 for (item in items(side)) inventory[side.ordinal][item.ordinal] = item.startCount
+                powers[side.ordinal].fill(1)
             }
             events.add(MatchEvent.BuildStarted(Side.LEFT))
         } else {
@@ -146,7 +164,7 @@ class Match(val config: MatchConfig) : Disposable {
     fun items(side: Side): List<ItemType> {
         val challenge = config.challenge
         if (challenge != null) return if (side == Side.LEFT) challenge.items.map { it.first } else emptyList()
-        return listOf(ItemType.MUD, ItemType.WATER, ItemType.BOWLING, pet(side).kind.signature)
+        return listOf(ItemType.MUD, pet(side).kind.signature, ItemType.WATER, ItemType.BOWLING, ItemType.MELON, ItemType.FIREWORK, ItemType.PAINT_BOMB)
     }
 
     fun throwsAllowed(): Int = config.challenge?.maxThrows ?: config.throwsPerPlayer
@@ -169,7 +187,54 @@ class Match(val config: MatchConfig) : Disposable {
     /** The names of the trick shots [side] landed, in order. */
     fun tricks(side: Side): List<String> = trickLog[side.ordinal]
 
-    fun stats(side: Side) = ThrowStats(throwsDone[side.ordinal], throwsThatHit[side.ordinal], trickShots[side.ordinal])
+    fun stats(side: Side) = ThrowStats(throwsDone[side.ordinal], throwsThatHit[side.ordinal], trickShots[side.ordinal], smashed[side.ordinal])
+
+    // ---- Power-ups ----
+
+    fun powersLeft(side: Side, power: PowerUp): Int = powers[side.ordinal][power.ordinal]
+
+    /** Mega and Triple wait, armed, for the throw. */
+    fun isArmed(side: Side, power: PowerUp): Boolean = armed[side.ordinal][power.ordinal]
+
+    fun hasUmbrella(side: Side): Boolean = umbrella[side.ordinal]
+
+    /** Whether the player whose turn it is can use [power] right now. */
+    fun canUsePower(power: PowerUp): Boolean {
+        if (phase != Phase.AIM || powersLeft(turn, power) <= 0) return false
+        return when (power) {
+            PowerUp.CALM -> wind != 0f
+            PowerUp.UMBRELLA -> !umbrella[turn.ordinal]
+            else -> true
+        }
+    }
+
+    /**
+     * Uses [power] for the player whose turn it is. Calm and Umbrella act at once; Mega and Triple
+     * are armed for this turn's throw (using them again disarms them) and used up when it's thrown.
+     */
+    fun usePower(power: PowerUp): Boolean {
+        if (phase != Phase.AIM) return false
+        val i = turn.ordinal
+        if (armed[i][power.ordinal]) {
+            armed[i][power.ordinal] = false
+            return true
+        }
+        if (!canUsePower(power)) return false
+        when (power) {
+            PowerUp.MEGA, PowerUp.TRIPLE -> armed[i][power.ordinal] = true
+            PowerUp.CALM -> {
+                powers[i][power.ordinal]--
+                wind = 0f
+                events.add(MatchEvent.PowerUsed(turn, power))
+            }
+            PowerUp.UMBRELLA -> {
+                powers[i][power.ordinal]--
+                umbrella[i] = true
+                events.add(MatchEvent.PowerUsed(turn, power))
+            }
+        }
+        return true
+    }
 
     fun drainEvents(out: MutableList<MatchEvent>) {
         out.addAll(events)
@@ -202,7 +267,7 @@ class Match(val config: MatchConfig) : Disposable {
     }
 
     private fun addPiece(type: PieceType, side: Side, rotated: Boolean, x: Float, y: Float) {
-        val piece = Piece(type, side, rotated, createPieceBody(type, side, rotated, x, y))
+        val piece = Piece(type, side, rotated, createPieceBody(type, side, rotated, x, y), rng.nextInt())
         piece.body.userData = piece
         pieces.add(piece)
     }
@@ -232,25 +297,49 @@ class Match(val config: MatchConfig) : Disposable {
     fun throwItem(item: ItemType, vx: Float, vy: Float): Boolean {
         if (!canThrow(item)) return false
         val side = turn
+        val i = side.ordinal
         val left = count(side, item)
-        if (left > 0) inventory[side.ordinal][item.ordinal] = left - 1
+        if (left > 0) inventory[i][item.ordinal] = left - 1
         val v = tmp.set(vx, vy).limit(Arena.MAX_SPEED)
-        lastVelocity[side.ordinal] = Vector2(v)
+        lastVelocity[i] = Vector2(v)
+        val mega = armed[i][PowerUp.MEGA.ordinal]
+        val triple = armed[i][PowerUp.TRIPLE.ordinal]
+        for (power in listOf(PowerUp.MEGA, PowerUp.TRIPLE)) {
+            if (!armed[i][power.ordinal]) continue
+            armed[i][power.ordinal] = false
+            powers[i][power.ordinal]--
+            events.add(MatchEvent.PowerUsed(side, power))
+        }
         val origin = Arena.launchPoint(side)
-        val p = spawnProjectile(item, side, origin.x, origin.y, v.x, v.y, fragment = false)
-        if (item.splitCount > 0) activeSplitter = p
+        tappables.clear()
+        for (deg in if (triple) TRIPLE_SPREAD else NO_SPREAD) {
+            val c = MathUtils.cosDeg(deg)
+            val s = MathUtils.sinDeg(deg)
+            val p = spawnProjectile(item, side, origin.x, origin.y, v.x * c - v.y * s, v.x * s + v.y * c, fragment = false,
+                scale = if (mega) Projectile.MEGA_SCALE else 1f, multi = triple)
+            if (item.tappable) tappables.add(p)
+        }
         throwHit = false
-        fragmentHits = 0
+        comboHits = 0
+        skyPopped = false
         phase = Phase.FLIGHT
         events.add(MatchEvent.Thrown(side, item))
         return true
     }
 
-    /** Splits the item in the air (hairball, seed shower) into smaller pieces that fan out. */
-    fun splitActive(): Boolean {
-        val p = activeSplitter ?: return false
-        activeSplitter = null
-        if (p.dead || phase != Phase.FLIGHT) return false
+    /** A tap during flight: hairballs and seed showers split into smaller pieces, fireworks pop. */
+    fun tap(): Boolean {
+        if (phase != Phase.FLIGHT) return false
+        val live = tappables.filter { !it.dead }
+        tappables.clear()
+        for (p in live) {
+            if (p.item.popsOnTap) burst(p, p.body.position.x, p.body.position.y, popped = true) else split(p)
+        }
+        return live.isNotEmpty()
+    }
+
+    /** Splits [p] in the air into smaller pieces that fan out. */
+    private fun split(p: Projectile) {
         val x = p.body.position.x
         val y = p.body.position.y
         val vx = p.body.linearVelocity.x
@@ -262,10 +351,9 @@ class Match(val config: MatchConfig) : Disposable {
             val deg = (i - (item.splitCount - 1) / 2f) * item.splitSpread
             val c = MathUtils.cosDeg(deg)
             val s = MathUtils.sinDeg(deg)
-            spawnProjectile(item, p.side, x, y, vx * c - vy * s, vx * s + vy * c, fragment = true)
+            spawnProjectile(item, p.side, x, y, vx * c - vy * s, vx * s + vy * c, fragment = true, scale = p.scale, multi = p.multi)
         }
         events.add(MatchEvent.Split(x, y))
-        return true
     }
 
     // ---- Simulation ----
@@ -285,8 +373,13 @@ class Match(val config: MatchConfig) : Disposable {
             p.body.applyForceToCenter((wind - p.side.dir * p.item.returnAccel) * m, 0f, true)
         }
         world.step(Arena.STEP, 8, 3)
+        for (piece in pieces) {
+            if (piece.softTimer > 0) piece.softTimer-- else piece.damage += piece.pendingKnock
+            piece.pendingKnock = 0f
+        }
         resolveHits()
         resolveCrushes()
+        breakPieces()
         if (thudCooldown > 0f) thudCooldown -= Arena.STEP
         if (thudStrength > THUD_IMPULSE && thudCooldown <= 0f) {
             events.add(MatchEvent.Thud(thudStrength, thudTire))
@@ -326,6 +419,10 @@ class Match(val config: MatchConfig) : Disposable {
     private fun endTurn() {
         throwsDone[turn.ordinal]++
         if (throwHit) throwsThatHit[turn.ordinal]++
+        for (i in umbrella.indices) {
+            if (umbrellaHit[i]) umbrella[i] = false
+            umbrellaHit[i] = false
+        }
         val challenge = config.challenge
         if (challenge != null) {
             val reached = pet(Side.RIGHT).mess >= challenge.goal
@@ -366,7 +463,7 @@ class Match(val config: MatchConfig) : Disposable {
         for (hit in hits) {
             val p = hit.projectile
             if (p.dead) continue
-            if (p.item == ItemType.WATER) {
+            if (p.item.burst != null) {
                 burst(p, hit.x, hit.y)
                 continue
             }
@@ -376,7 +473,15 @@ class Match(val config: MatchConfig) : Disposable {
                         p.scoredPet = true
                         addMess(other, p.mess * speedFactor(hit.speed), hit.x, hit.y, p.item, directHit = true, trick = trickFor(p, hit.vx))
                     }
-                    if (p.item.splatsOnContact) splat(p, other.body, other.decals, PET_DECALS, hit.x, hit.y)
+                    if (p.item.splatsOnContact) {
+                        if (shielded(other)) {
+                            // It splats on the umbrella instead.
+                            p.dead = true
+                            events.add(MatchEvent.Splat(hit.x, hit.y, p.item))
+                        } else {
+                            splat(p, other.body, other.decals, PET_DECALS, hit.x, hit.y)
+                        }
+                    }
                 }
                 is Piece -> if (p.item.splatsOnContact) splat(p, other.body, other.decals, PIECE_DECALS, hit.x, hit.y) else p.bounces++
                 else -> if (p.item.splatsOnContact) splat(p, null, groundDecals, GROUND_DECALS, hit.x, hit.y) else p.bounces++
@@ -403,13 +508,13 @@ class Match(val config: MatchConfig) : Disposable {
 
     /** Names a skill shot: a boomerang hitting on its way back, a roller that banked in, or several split pieces landing. */
     private fun trickFor(p: Projectile, vxAtContact: Float): String? {
-        if (p.fragment) {
-            fragmentHits++
-            return when (fragmentHits) {
+        if (p.fragment || p.multi) {
+            comboHits++
+            return when (comboHits) {
                 1 -> null
                 2 -> "Double!"
                 3 -> "Triple!"
-                else -> "Combo x$fragmentHits!"
+                else -> "Combo x$comboHits!"
             }
         }
         return when {
@@ -421,9 +526,21 @@ class Match(val config: MatchConfig) : Disposable {
 
     private fun speedFactor(speed: Float) = (speed / 12f).coerceIn(0.6f, 1.25f)
 
-    /** [directHit] marks mess that counts as a hit in the stats: a direct hit or a water balloon's burst, not near-miss spatter or crushes. */
-    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?, directHit: Boolean = false, trick: String? = null) {
-        if (amount < 0.5f) return
+    /** Whether [pet] sits under its umbrella while the other player throws. */
+    private fun shielded(pet: Pet): Boolean = umbrella[pet.side.ordinal] && pet.side != turn
+
+    /**
+     * Adds mess to [pet] unless its umbrella catches it; returns whether any was added. [directHit]
+     * marks mess that counts as a hit in the stats: a direct hit or a burst, not near-miss spatter or crushes.
+     */
+    private fun addMess(pet: Pet, amount: Float, x: Float, y: Float, item: ItemType?, directHit: Boolean = false, trick: String? = null): Boolean {
+        if (amount < 0.5f) return false
+        if (shielded(pet)) {
+            val i = pet.side.ordinal
+            if (!umbrellaHit[i]) events.add(MatchEvent.Blocked(pet.side, x, y))
+            umbrellaHit[i] = true
+            return false
+        }
         val before = pet.mess
         pet.mess = min(Arena.MESS_TO_LOSE, pet.mess + amount)
         pet.hitTimer = 0.9f
@@ -434,6 +551,7 @@ class Match(val config: MatchConfig) : Disposable {
             trickLog[turn.ordinal].add(trick)
         }
         events.add(MatchEvent.PetHit(pet.side, gained, x, y, item, trick))
+        return true
     }
 
     private fun splat(p: Projectile, body: Body?, decals: MutableList<Decal>, cap: Int, x: Float, y: Float) {
@@ -464,29 +582,92 @@ class Match(val config: MatchConfig) : Disposable {
         }
     }
 
-    private fun burst(p: Projectile, x: Float, y: Float) {
+    /**
+     * A water balloon, watermelon, firework or paint bomb going off at (x, y): pets in reach get messy
+     * (fully within 0.8 m, less farther out), and fort pieces are pushed away and, by the harder ones, cracked.
+     * A firework [popped] in the air by a tap that still messes up the other pet is a trick shot.
+     */
+    private fun burst(p: Projectile, x: Float, y: Float, popped: Boolean = false) {
         p.dead = true
-        events.add(MatchEvent.Burst(x, y))
+        val b = p.item.burst ?: return
+        val radius = b.radius * if (p.scale > 1f) MEGA_BURST else 1f
+        events.add(MatchEvent.Burst(x, y, p.item, radius))
+        var trick = if (popped && !skyPopped) "Sky pop!" else null
         for (pet in pets.values) {
             val pos = pet.body.position
             val d = Vector2.dst(pos.x, pos.y, x, y)
-            val f = 1f - (d - 0.8f) / (SPLASH_RADIUS - 0.8f)
-            if (f > 0f) {
-                addMess(pet, ItemType.WATER.mess * min(f, 1f), pos.x, pos.y + Arena.PET_H / 2f, ItemType.WATER, directHit = true)
-                pet.decals.add(Decal((x - pos.x) * 0.4f, 0.1f + rng.nextFloat() * 0.3f, 0.2f, ItemType.WATER, rng.nextInt()))
+            val f = 1f - (d - 0.8f) / (radius - 0.8f)
+            if (f <= 0f) continue
+            val forOther = pet.side != p.side
+            if (addMess(pet, p.mess * min(f, 1f), pos.x, pos.y + Arena.PET_H / 2f, p.item, directHit = true, trick = if (forOther) trick else null)) {
+                if (forOther && trick != null) {
+                    trick = null
+                    skyPopped = true
+                }
+                pet.decals.add(Decal((x - pos.x).coerceIn(-1.5f, 1.5f) * 0.3f, -0.1f + rng.nextFloat() * 0.5f, 0.2f * min(f, 1f) + 0.06f, p.item, rng.nextInt()))
                 if (pet.decals.size > PET_DECALS) pet.decals.removeAt(0)
             }
+            // Pets only wobble; a blast never knocks them flying or over.
+            push(pet.body, x, y, radius, min(b.push, 1.4f), 0.2f, tumble = false)
         }
-        for (body in solidBodies()) {
-            val pos = body.position
-            val dx = pos.x - x
-            val dy = pos.y - y
-            val d = Vector2.len(dx, dy)
-            if (d < SPLASH_RADIUS && d > 0.01f) {
-                val dv = 1.4f * (1f - d / SPLASH_RADIUS) * body.mass / d
-                body.applyLinearImpulse(dx * dv, dy * dv + 0.2f * body.mass, pos.x, pos.y, true)
+        for (piece in pieces) {
+            val pos = piece.body.position
+            val reach = 1f - (Vector2.dst(pos.x, pos.y, x, y) - min(piece.halfW, piece.halfH)).coerceAtLeast(0f) / radius
+            if (reach <= 0f) continue
+            // Blasts that crack things also throw them up in the air; a water balloon only nudges.
+            push(piece.body, x, y, radius, b.push, if (b.damage > 0f) 0.2f + b.push * 0.3f * reach else 0.2f, tumble = b.damage > 0f)
+            piece.damage += b.damage * reach
+            if (p.item != ItemType.WATER && piece.decals.size < PIECE_DECALS && reach > 0.4f) {
+                val local = piece.body.getLocalPoint(tmp.set(x, y)).limit(min(piece.halfW, piece.halfH))
+                piece.decals.add(Decal(local.x, local.y, 0.18f + 0.12f * reach, p.item, rng.nextInt()))
             }
         }
+        if (p.item != ItemType.WATER && y < Arena.GROUND_Y + radius * 0.5f) {
+            groundDecals.add(Decal(x, Arena.GROUND_Y - 0.05f, radius * 0.22f, p.item, rng.nextInt()))
+            if (groundDecals.size > GROUND_DECALS) groundDecals.removeAt(0)
+        }
+    }
+
+    /**
+     * Pushes [body] away from (x, y): up to [speed] m/s at the center of the burst, plus [lift] m/s
+     * upward. With [tumble], the push lands a little off center so the body spins as it flies.
+     */
+    private fun push(body: Body, x: Float, y: Float, radius: Float, speed: Float, lift: Float, tumble: Boolean) {
+        val pos = body.position
+        val dx = pos.x - x
+        val dy = pos.y - y
+        val d = Vector2.len(dx, dy)
+        if (d >= radius || d < 0.01f) return
+        val dv = speed * (1f - d / radius) * body.mass / d
+        val offset = if (tumble) 0.15f * (if (dx > 0f) 1f else -1f) else 0f
+        body.applyLinearImpulse(dx * dv, dy * dv + lift * body.mass, pos.x, pos.y + offset, true)
+    }
+
+    /** Pieces that took one knock too many fall apart. */
+    private fun breakPieces() {
+        val it = pieces.iterator()
+        while (it.hasNext()) {
+            val piece = it.next()
+            if (piece.damage < piece.type.toughness) continue
+            it.remove()
+            val b = piece.body
+            events.add(MatchEvent.PieceBroken(piece.side, piece.type, b.position.x, b.position.y, b.angle, b.linearVelocity.x, b.linearVelocity.y))
+            if (piece.side != turn) smashed[turn.ordinal]++
+            world.destroyBody(b)
+        }
+    }
+
+    /**
+     * A knock on [piece] from [other]: hard throws, falls and crashes crack things; soft throws never
+     * do, not even by pressing the piece into the ground.
+     */
+    private fun knock(piece: Piece, other: Any?, impulse: Float) {
+        if (other is Projectile && !other.item.smashes) {
+            piece.softTimer = SOFT_STEPS
+            return
+        }
+        val jolt = impulse / piece.body.mass
+        if (jolt > KNOCK_FLOOR) piece.pendingKnock += jolt - KNOCK_FLOOR
     }
 
     private fun ageProjectiles() {
@@ -502,7 +683,7 @@ class Match(val config: MatchConfig) : Disposable {
             val p = it.next()
             if (!p.dead) continue
             world.destroyBody(p.body)
-            if (p === activeSplitter) activeSplitter = null
+            tappables.remove(p)
             it.remove()
         }
     }
@@ -592,21 +773,21 @@ class Match(val config: MatchConfig) : Disposable {
         return body
     }
 
-    private fun spawnProjectile(item: ItemType, side: Side, x: Float, y: Float, vx: Float, vy: Float, fragment: Boolean): Projectile {
+    private fun spawnProjectile(item: ItemType, side: Side, x: Float, y: Float, vx: Float, vy: Float, fragment: Boolean, scale: Float = 1f, multi: Boolean = false): Projectile {
         val body = world.createBody(BodyDef().apply {
             type = BodyDef.BodyType.DynamicBody
             position.set(x, y)
             linearVelocity.set(vx, vy)
             angularVelocity = when (item) {
                 ItemType.BONE -> -side.dir * 12f
-                ItemType.CARROT -> 0f
+                ItemType.CARROT, ItemType.FIREWORK -> 0f
                 else -> -side.dir * 4f
             }
-            fixedRotation = item == ItemType.CARROT
+            fixedRotation = item == ItemType.CARROT || item == ItemType.FIREWORK
             gravityScale = item.gravityScale
             bullet = true
         })
-        val p = Projectile(item, side, body, fragment)
+        val p = Projectile(item, side, body, fragment, scale, multi)
         body.userData = p
         val shape = CircleShape().apply { radius = p.radius }
         addFixture(body, shape, item.density, if (item == ItemType.SHELL) 0.15f else 0.5f, item.restitution, Bits.shot(side), Bits.shotMask(side))
@@ -660,7 +841,16 @@ class Match(val config: MatchConfig) : Disposable {
             val ub = contact.fixtureB.body.userData
             if (ua !is Piece && ub !is Piece) return
             var strength = 0f
-            for (i in 0 until impulse.count) strength = max(strength, impulse.normalImpulses[i])
+            var total = 0f
+            for (i in 0 until impulse.count) {
+                strength = max(strength, impulse.normalImpulses[i])
+                total += impulse.normalImpulses[i]
+            }
+            // Only knocks while things fly and settle count: building and setting up a level never break anything.
+            if (phase == Phase.FLIGHT || phase == Phase.SETTLE) {
+                if (ua is Piece) knock(ua, ub, total)
+                if (ub is Piece) knock(ub, ua, total)
+            }
             val pet = ua as? Pet ?: ub as? Pet
             if (pet != null && strength > CRUSH_IMPULSE) crushes.add(Crush(pet, strength))
             if (strength > thudStrength) {
@@ -679,8 +869,14 @@ class Match(val config: MatchConfig) : Disposable {
     }
 
     companion object {
-        const val SPLASH_RADIUS = 3.2f
         const val NEAR_MISS_RADIUS = 1.5f
+        /** Knocks gentler than this (a change in speed, in m/s) do no damage, so stacking and toppling are safe. */
+        const val KNOCK_FLOOR = 3f
+        private const val SOFT_STEPS = 3
+        /** A Mega burst reaches this much farther. */
+        const val MEGA_BURST = 1.3f
+        private val NO_SPREAD = floatArrayOf(0f)
+        private val TRIPLE_SPREAD = floatArrayOf(-5f, 0f, 5f)
         const val CRUSH_IMPULSE = 3f
         const val MAX_CRUSH_PER_TURN = 20f
         const val THUD_IMPULSE = 2.5f

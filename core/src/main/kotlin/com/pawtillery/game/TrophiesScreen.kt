@@ -25,7 +25,7 @@ class TrophiesScreen(game: Pawtillery) : BaseScreen(game) {
         val statsX = uiW / 2f - 760f
         val listX = statsX + 500f
         val colW = 500f
-        val rowH = 78f
+        val rowH = 70f
         val trophies = Trophy.entries
         val rows = (trophies.size + 1) / 2
         val listH = rows * rowH + 30f
@@ -54,13 +54,14 @@ class TrophiesScreen(game: Pawtillery) : BaseScreen(game) {
             "Throws" to "${st.totalThrows}",
             "Hit rate" to "$hitRate%",
             "Trick shots" to "${st.totalTricks}",
+            "Pieces smashed" to "${st.totalSmashed}",
             "Trick Shot stars" to "${st.totalStars} / ${Challenges.all.size * 3}",
             "Daily challenges" to "${st.dailiesDone}",
             "Two-player games" to "${st.twoPlayerGames}",
         )
         Ui.textAt(batch, a.h2, "Your stats", statsX + 28f, top - 44f, Palette.INK)
         for ((i, pair) in stats.withIndex()) {
-            val y = top - 96f - i * 46f
+            val y = top - 92f - i * 44f
             Ui.textAt(batch, a.body, pair.first, statsX + 28f, y, Palette.INK, alpha = 0.75f)
             Ui.textAt(batch, a.h2, pair.second, statsX + 442f, y, Palette.INK, rightAligned = true)
         }

@@ -8,13 +8,13 @@ Pawtillery: Backyard Pet Splat
 
 ## Short description (80 characters max)
 
-Build a fort, then splat the neighbor's pet! Turn-based throwing for all ages.
+Build a fort, smash theirs, splat the neighbor's pet! Throwing fun for all ages.
 
 ## Full description
 
 Two neighbors' pets. One garden fence. A whole lot of mud.
 
-Pawtillery is a turn-based throwing game for the whole family. First you build a fort: drop boxes, crates, planks, flower pots, garden gnomes and tires into your yard, and watch them stack and topple with real physics. Then take turns lobbing messy things over the fence. Every hit fills the other pet's mess meter. Get them to 100% and you win!
+Pawtillery is a turn-based throwing game for the whole family. First you build a fort: drop boxes, crates, planks, flower pots, garden gnomes and tires into your yard, and watch them stack and topple with real physics. Then take turns lobbing messy things over the fence and smashing the other fort to bits. Every hit fills the other pet's mess meter. Get them to 100% and you win!
 
 EASY TO START, HARD TO MASTER
 • Drag back and let go to throw, like a slingshot
@@ -30,15 +30,28 @@ FIVE PETS, FIVE SIGNATURE THROWS
 • Parrot: the Seed Shower scatters five seeds from the sky
 Plus mud balls, water balloons that soak everything nearby, and bowling balls that smash forts apart.
 
+SMASH THEIR FORT
+• Crates crack, boxes crunch, planks snap, flower pots and gnomes shatter
+• Watermelons crash through and burst in a giant splash
+• Fireworks float across the yard: tap to pop them right above the target
+• One Paint Bomb per match: KABOOM! A rainbow blast that throws forts into the air
+• Stacks come tumbling down with real physics
+
+POWER-UPS
+• Mega: your next throw is twice as big
+• Triple: throw three at once
+• Calm: stop the wind for one throw
+• Umbrella: block the next hit on your pet
+
 PLAY YOUR WAY
 • Against the computer, or 2 players passing one phone
 • Quick matches of 5 throws, or full matches of 10
-• 10 Trick Shot puzzle levels with 3-star ratings
+• 12 Trick Shot puzzle levels with 3-star ratings
 • A new Daily Challenge every day
-• 14 trophies and lifetime stats: hit rate, win streaks, trick shots
+• 16 trophies and lifetime stats: hit rate, win streaks, trick shots, pieces smashed
 
 FAMILY FRIENDLY
-• Nothing violent: pets just get messy
+• Nothing violent: pets just get messy, and only forts break
 • No chat, no accounts, no personal data collected
 • No pop-up ads. Optional short ads only if you choose to double your treats
 • One optional purchase, Pawtillery Plus (all pets, no ads, double treats), behind a grown-up check
@@ -56,4 +69,4 @@ FAMILY FRIENDLY
 
 ## Release notes for 1.0.0
 
-First release! Build forts, splat pets, earn treats, unlock all five pets, and beat ten Trick Shots and a new Daily Challenge every day.
+First release! Build forts, smash them, splat pets, earn treats, unlock all five pets, and beat twelve Trick Shots and a new Daily Challenge every day.

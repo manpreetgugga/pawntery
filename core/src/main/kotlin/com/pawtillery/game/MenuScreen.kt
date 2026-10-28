@@ -110,13 +110,14 @@ class MenuScreen(game: Pawtillery) : BaseScreen(game) {
             "1. Build: tap a piece, then touch your yard to drop it. Up to 6 pieces shield your pet.",
             "2. Throw: drag back anywhere and let go, or set angle and power with + and - and tap Throw.",
             "3. Splat the other pet! Every hit fills their mess meter. 100% messy loses.",
-            "4. Trick shots, Trick Shot levels and the Daily earn treats. Spend them on new pets.",
-            "Bowling balls smash forts, water balloons soak around walls, and each pet has a special throw.",
+            "4. Smash their fort: bowling balls, watermelons, fireworks and the paint bomb crack and break it.",
+            "5. Power-ups, once a match: Mega throws big, Triple throws three, Calm stops the wind, Umbrella blocks a hit.",
+            "6. Trick shots, Trick Shot levels and the Daily earn treats. Spend them on new pets.",
         )
-        var y = uiH - 200f
+        var y = uiH - 196f
         for (line in steps) {
-            Ui.paragraph(batch, a.body, line, cx, y, 940f, Palette.INK)
-            y -= 92f
+            Ui.paragraph(batch, a.body, line, cx, y, 960f, Palette.INK)
+            y -= 84f
         }
     }
 

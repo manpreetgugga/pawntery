@@ -120,6 +120,15 @@ class ProgressTest {
     }
 
     @Test
+    fun smashingFortsEarnsTheDemolitionTrophies() {
+        val one = GameSummary(GameKind.VS_COMPUTER, false, ComputerLevel.NORMAL, 10, 10, 2, emptyList(), 40f, smashed = 5)
+        assertEquals(listOf(Trophy.DEMOLITION), award(one))
+        repeat(8) { award(GameSummary(GameKind.TWO_PLAYERS, false, null, 10, 20, 4, emptyList(), 40f, smashed = 6)) }
+        assertEquals(53, settings.totalSmashed)
+        assertTrue(settings.hasTrophy(Trophy.WRECKING_BALL))
+    }
+
+    @Test
     fun dailyChallengePaysOncePerDayAndCountsTowardDailyRegular() {
         assertEquals(DAILY_REWARD, settings.recordDaily(100L, 1))
         assertEquals("a better score the same day pays nothing more", 0, settings.recordDaily(100L, 3))

@@ -98,15 +98,16 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
 
     /**
      * Records a finished game and returns the treats it earned: a base for the result (scaled by
-     * match length and by [levelFactor] for the computer's level), 2 per hit and 5 per trick shot.
+     * match length and by [levelFactor] for the computer's level), 2 per hit, 5 per trick shot and
+     * 1 per fort piece [smashed].
      */
-    fun recordGame(result: GameResult, throwsPerPlayer: Int, hits: Int, tricks: Int, levelFactor: Float = 1f): Int {
+    fun recordGame(result: GameResult, throwsPerPlayer: Int, hits: Int, tricks: Int, levelFactor: Float = 1f, smashed: Int = 0): Int {
         val base = when (result) {
             GameResult.WIN -> 30
             GameResult.DRAW -> 18
             GameResult.LOSS -> 12
         }
-        val earned = ((base * throwsPerPlayer / MatchConfig.FULL_MATCH * levelFactor).toInt() + hits * 2 + tricks * 5) * treatMultiplier
+        val earned = ((base * throwsPerPlayer / MatchConfig.FULL_MATCH * levelFactor).toInt() + hits * 2 + tricks * 5 + smashed) * treatMultiplier
         prefs.putInteger("treats", treats + earned)
         prefs.putInteger("gamesPlayed", gamesPlayed + 1)
         if (result == GameResult.WIN) prefs.putInteger("wins", wins + 1)
@@ -124,12 +125,14 @@ class Settings(private val prefs: Preferences = Gdx.app.getPreferences("pawtille
     val bestStreak: Int get() = prefs.getInteger("stats.bestStreak", 0)
     val twoPlayerGames: Int get() = prefs.getInteger("stats.twoPlayerGames", 0)
     val dailiesDone: Int get() = prefs.getInteger("stats.dailies", 0)
+    val totalSmashed: Int get() = prefs.getInteger("stats.smashed", 0)
 
     /** Adds one finished game to the lifetime stats (treats and wins are recorded separately). */
     fun recordStats(summary: GameSummary) {
         prefs.putInteger("stats.throws", totalThrows + summary.throws)
         prefs.putInteger("stats.hits", totalHits + summary.hits)
         prefs.putInteger("stats.tricks", totalTricks + summary.tricks.size)
+        prefs.putInteger("stats.smashed", totalSmashed + summary.smashed)
         if (summary.kind == GameKind.TWO_PLAYERS) prefs.putInteger("stats.twoPlayerGames", twoPlayerGames + 1)
         if (summary.kind == GameKind.VS_COMPUTER) {
             val streak = if (summary.won) winStreak + 1 else 0

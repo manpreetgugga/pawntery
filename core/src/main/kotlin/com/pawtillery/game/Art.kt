@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.MathUtils
 import kotlin.math.abs
+import kotlin.math.min
 
 object Palette {
     private fun c(hex: String): Color = Color.valueOf(hex)
@@ -64,6 +65,15 @@ object Palette {
     val GRAVY = c("A8582A")
     val HAIR = c("9E9E9E")
     val HAIR_DARK = c("757575")
+    val MELON_RIND = c("2E8B3A")
+    val MELON_STRIPE = c("1E5E26")
+    val MELON_FLESH = c("F2545B")
+    val MELON_SEED = c("2B1B12")
+    val ROCKET = c("E53935")
+    val BOMB = c("2D2A4A")
+    val FUSE_CAP = c("8D8AA8")
+    /** Paint and confetti colors. */
+    val PAINTS = listOf(c("FF4FA3"), c("FFD23F"), c("3FC5FF"), c("7CE04B"), c("9B5DE5"))
 
     val BOX = c("D9A86C")
     val BOX_DARK = c("9C7442")
@@ -591,8 +601,146 @@ object Art {
         s.translate(b.position.x, b.position.y, 0f)
         s.rotate(0f, 0f, 1f, b.angle * MathUtils.radiansToDegrees)
         pieceShape(s, piece.type, 1f)
+        cracks(s, piece.type, piece.seed, piece.wear)
         for (d in piece.decals) splat(s, d)
         s.identity()
+    }
+
+    /** Cracks that grow as a piece wears out: one at a quarter of its toughness, up to three near breaking. */
+    fun cracks(s: ShapeRenderer, type: PieceType, seed: Int, wear: Float) {
+        val count = when {
+            wear > 0.75f -> 3
+            wear > 0.5f -> 2
+            wear > 0.25f -> 1
+            else -> 0
+        }
+        if (count == 0) return
+        val hw = type.w / 2f
+        val hh = type.h / 2f
+        // Rubber only scuffs; everything else cracks.
+        paint(s, if (type == PieceType.TIRE) tmpColor.set(0.6f, 0.6f, 0.6f, 0.9f) else tmpColor.set(Palette.INK).also { it.a = 0.85f })
+        val width = min(0.05f, min(hw, hh) * 0.3f)
+        for (c in 0 until count) {
+            // Start on an edge and zigzag toward the middle.
+            val edge = hash(seed, c * 7) * 4f
+            var x: Float
+            var y: Float
+            val along = hash(seed, c * 7 + 1) * 1.4f - 0.7f
+            when (edge.toInt()) {
+                0 -> { x = -hw; y = along * hh }
+                1 -> { x = hw; y = along * hh }
+                2 -> { x = along * hw; y = hh }
+                else -> { x = along * hw; y = -hh }
+            }
+            if (type == PieceType.TIRE) {
+                val a = edge * 90f
+                x = MathUtils.cosDeg(a) * hw
+                y = MathUtils.sinDeg(a) * hw
+            }
+            val tx = (hash(seed, c * 7 + 2) - 0.5f) * hw * 0.6f
+            val ty = (hash(seed, c * 7 + 3) - 0.5f) * hh * 0.6f
+            for (k in 1..3) {
+                val f = k / 3f
+                val jitter = (hash(seed, c * 7 + 3 + k) - 0.5f) * min(hw, hh) * 0.5f
+                val nx = MathUtils.lerp(x, tx, f) + if (hw > hh) 0f else jitter
+                val ny = MathUtils.lerp(y, ty, f) + if (hw > hh) jitter else 0f
+                s.rectLine(x, y, nx, ny, width)
+                x = nx
+                y = ny
+            }
+        }
+    }
+
+    /** A repeatable pseudo-random number in [0, 1) from [seed] and [k]. */
+    private fun hash(seed: Int, k: Int): Float {
+        var h = seed * 0x27d4eb2d + k * 0x165667b1
+        h = h xor (h ushr 15)
+        h *= 0x2c1b3c6d
+        h = h xor (h ushr 12)
+        return (h and 0xFFFF) / 65536f
+    }
+
+    /** An open umbrella held up in front of a pet at (x, y), leaning toward [dir]. */
+    fun umbrella(s: ShapeRenderer, x: Float, y: Float, dir: Float, t: Float) {
+        val sway = MathUtils.sin(t * 2f) * 3f
+        s.identity()
+        s.translate(x, y, 0f)
+        s.rotate(0f, 0f, 1f, -dir * 25f + sway)
+        val r = 1.05f
+        paint(s, Palette.INK)
+        s.rectLine(0f, -1.0f, 0f, 0.1f, 0.08f)
+        s.arc(-0.12f, -1.0f, 0.12f, 180f, 180f, 8)
+        s.arc(0f, 0f, r + 0.07f, 0f, 180f, 30)
+        for (i in 0 until 6) {
+            paint(s, if (i % 2 == 0) Palette.GNOME_HAT else Palette.WHITE)
+            s.arc(0f, 0f, r, i * 30f, 30f, 6)
+        }
+        // Scalloped rim
+        paint(s, Palette.INK)
+        for (i in 0 until 6) {
+            val cx = -r + (i + 0.5f) * (2f * r / 6f)
+            s.circle(cx, 0f, r / 6f + 0.03f, 10)
+        }
+        for (i in 0 until 6) {
+            paint(s, if (i % 2 == 0) Palette.GNOME_HAT else Palette.WHITE)
+            s.circle(-r + (i + 0.5f) * (2f * r / 6f), 0f, r / 6f - 0.02f, 10)
+        }
+        paint(s, Palette.INK)
+        s.circle(0f, r + 0.05f, 0.07f, 8)
+        s.identity()
+    }
+
+    /** A power-up's icon, [size] across, centered on (cx, cy), in UI units. */
+    fun powerIcon(s: ShapeRenderer, power: PowerUp, cx: Float, cy: Float, size: Float) {
+        val k = size / 64f
+        when (power) {
+            PowerUp.MEGA -> {
+                s.color = Palette.INK
+                s.circle(cx, cy, 21f * k, 20)
+                s.color = Palette.ACCENT
+                s.circle(cx, cy, 17f * k, 20)
+                s.color = Palette.INK
+                for (i in 0 until 4) {
+                    val a = 45f + i * 90f
+                    val c = MathUtils.cosDeg(a)
+                    val sn = MathUtils.sinDeg(a)
+                    val tipX = cx + c * 32f * k
+                    val tipY = cy + sn * 32f * k
+                    s.triangle(tipX, tipY, cx + c * 23f * k - sn * 7f * k, cy + sn * 23f * k + c * 7f * k, cx + c * 23f * k + sn * 7f * k, cy + sn * 23f * k - c * 7f * k)
+                }
+            }
+            PowerUp.TRIPLE -> {
+                for (i in -1..1) {
+                    val a = 90f + i * 32f
+                    val bx = cx + MathUtils.cosDeg(a) * 18f * k
+                    val by = cy - 12f * k + MathUtils.sinDeg(a) * 26f * k
+                    s.color = Palette.INK
+                    s.circle(bx, by, 12f * k, 14)
+                    s.color = Palette.TEAL
+                    s.circle(bx, by, 9f * k, 14)
+                }
+            }
+            PowerUp.CALM -> {
+                s.color = Palette.TEAL_DARK
+                for (i in 0 until 3) {
+                    val y = cy + (i - 1) * 13f * k
+                    val x0 = cx - 26f * k + i * 4f * k
+                    s.rectLine(x0, y, cx + 22f * k - i * 6f * k, y, 6f * k)
+                }
+                s.color = Palette.BAD
+                s.rectLine(cx - 24f * k, cy - 24f * k, cx + 24f * k, cy + 24f * k, 7f * k)
+            }
+            PowerUp.UMBRELLA -> {
+                s.color = Palette.INK
+                s.rectLine(cx, cy + 4f * k, cx, cy - 24f * k, 4f * k)
+                s.arc(cx - 5f * k, cy - 24f * k, 5f * k, 180f, 180f, 8)
+                s.arc(cx, cy, 30f * k, 0f, 180f, 20)
+                for (i in 0 until 4) {
+                    s.color = if (i % 2 == 0) Palette.GNOME_HAT else Palette.WHITE
+                    s.arc(cx, cy, 26f * k, i * 45f, 45f, 8)
+                }
+            }
+        }
     }
 
     /** A fort piece in its own unrotated coordinates; [alpha] < 1 draws a placement ghost. */
@@ -678,8 +826,8 @@ object Art {
         val b = p.body
         s.identity()
         s.translate(b.position.x, b.position.y, 0f)
-        // A carrot points where it is going; everything else spins with its body.
-        val angle = if (p.item == ItemType.CARROT) MathUtils.atan2(b.linearVelocity.y, b.linearVelocity.x) else b.angle
+        // Carrots and fireworks point where they are going; everything else spins with its body.
+        val angle = if (p.item == ItemType.CARROT || p.item == ItemType.FIREWORK) MathUtils.atan2(b.linearVelocity.y, b.linearVelocity.x) else b.angle
         s.rotate(0f, 0f, 1f, angle * MathUtils.radiansToDegrees)
         if (p.fragment && p.item == ItemType.SEEDS) seed(s, p.radius) else itemShape(s, p.item, p.radius)
         s.identity()
@@ -690,6 +838,13 @@ object Art {
         s.ellipse(-r * 1.1f, -r * 0.75f, r * 2.2f, r * 1.5f, 18)
         paint(s, Palette.SEED)
         s.ellipse(-r * 0.95f, -r * 0.6f, r * 1.9f, r * 1.2f, 18)
+    }
+
+    /** How far an item's drawing reaches from its center, for fitting it in a button. */
+    fun iconRadius(item: ItemType): Float = when (item) {
+        ItemType.FIREWORK -> 0.55f
+        ItemType.PAINT_BOMB -> item.radius * 1.35f
+        else -> item.radius
     }
 
     fun itemShape(s: ShapeRenderer, item: ItemType, r: Float) {
@@ -759,6 +914,55 @@ object Art {
                     s.ellipse(MathUtils.cosDeg(a) * d - r * 0.12f, MathUtils.sinDeg(a) * d - r * 0.07f, r * 0.24f, r * 0.14f, a, 8)
                 }
             }
+            ItemType.MELON -> {
+                paint(s, Palette.MELON_STRIPE); s.ellipse(-r * 1.12f, -r, r * 2.24f, r * 2f, 24)
+                paint(s, Palette.MELON_RIND); s.ellipse(-r * 1.04f, -r * 0.92f, r * 2.08f, r * 1.84f, 24)
+                paint(s, Palette.MELON_STRIPE)
+                for (i in -2..2) s.ellipse(-r * 0.9f, i * r * 0.32f - r * 0.07f, r * 1.8f, r * 0.14f, 14)
+                paint(s, tmpColor.set(1f, 1f, 1f, 0.25f))
+                s.ellipse(-r * 0.7f, r * 0.25f, r * 0.6f, r * 0.35f, 10)
+            }
+            ItemType.FIREWORK -> {
+                // Drawn pointing along +x, like the carrot.
+                val k = r / ItemType.FIREWORK.radius
+                paint(s, Palette.TRUNK)
+                s.rectLine(-0.62f * k, 0f, -0.2f * k, 0f, 0.05f * k)
+                paint(s, Palette.INK)
+                s.rect(-0.27f * k, -0.13f * k, 0.48f * k, 0.26f * k)
+                s.triangle(0.2f * k, -0.14f * k, 0.2f * k, 0.14f * k, 0.44f * k, 0f)
+                s.triangle(-0.27f * k, 0.12f * k, -0.27f * k, 0.24f * k, -0.12f * k, 0.12f * k)
+                s.triangle(-0.27f * k, -0.12f * k, -0.27f * k, -0.24f * k, -0.12f * k, -0.12f * k)
+                paint(s, Palette.ROCKET)
+                s.rect(-0.24f * k, -0.1f * k, 0.44f * k, 0.2f * k)
+                paint(s, Palette.WHITE)
+                s.rect(-0.1f * k, -0.1f * k, 0.07f * k, 0.2f * k)
+                s.rect(0.05f * k, -0.1f * k, 0.07f * k, 0.2f * k)
+                paint(s, Palette.GOLD)
+                s.triangle(0.21f * k, -0.1f * k, 0.21f * k, 0.1f * k, 0.4f * k, 0f)
+            }
+            ItemType.PAINT_BOMB -> {
+                paint(s, Palette.INK)
+                s.rect(-r * 0.22f, r * 0.8f, r * 0.44f, r * 0.42f)
+                s.rectLine(0f, r * 1.15f, r * 0.3f, r * 1.45f, r * 0.12f)
+                paint(s, Palette.FUSE_CAP)
+                s.rect(-r * 0.16f, r * 0.84f, r * 0.32f, r * 0.32f)
+                paint(s, Palette.INK); s.circle(0f, 0f, r * 1.04f, 22)
+                paint(s, Palette.BOMB); s.circle(0f, 0f, r * 0.94f, 22)
+                for ((i, c) in Palette.PAINTS.withIndex()) {
+                    if (i > 2) break
+                    paint(s, c)
+                    val a = i * 120f + 30f
+                    s.circle(MathUtils.cosDeg(a) * r * 0.45f, MathUtils.sinDeg(a) * r * 0.45f, r * 0.24f, 12)
+                    s.ellipse(MathUtils.cosDeg(a) * r * 0.45f - r * 0.06f, MathUtils.sinDeg(a) * r * 0.45f - r * 0.42f, r * 0.12f, r * 0.4f, 8)
+                }
+                paint(s, tmpColor.set(1f, 1f, 1f, 0.3f))
+                s.circle(-r * 0.4f, r * 0.4f, r * 0.16f, 10)
+                // The spark on the fuse
+                paint(s, Palette.GOLD)
+                s.circle(r * 0.32f, r * 1.5f, r * 0.16f, 10)
+                paint(s, Palette.WHITE)
+                s.circle(r * 0.32f, r * 1.5f, r * 0.07f, 8)
+            }
             ItemType.HAIRBALL -> {
                 paint(s, Palette.HAIR_DARK)
                 for (i in 0 until 9) {
@@ -788,11 +992,25 @@ object Art {
         ItemType.CARROT -> Palette.CARROT
         ItemType.SHELL -> Palette.TURTLE_SHELL
         ItemType.SEEDS -> Palette.SEED
+        ItemType.MELON -> Palette.MELON_FLESH
+        ItemType.FIREWORK -> Palette.GOLD
+        ItemType.PAINT_BOMB -> Palette.PAINTS[0]
     }
 
     /** A blob with a few droplets, shaped by the decal's seed so each splat looks different. */
     fun splat(s: ShapeRenderer, d: Decal) {
-        paint(s, splatColor(d.item))
+        paint(s, if (d.item == ItemType.PAINT_BOMB) Palette.PAINTS[(d.seed ushr 3).mod(Palette.PAINTS.size)] else splatColor(d.item))
+        if (d.item == ItemType.FIREWORK) {
+            // Confetti that stuck
+            for (i in 0 until 6) {
+                val bits = d.seed ushr (i * 4)
+                paint(s, Palette.PAINTS[(bits and 0xF).mod(Palette.PAINTS.size)])
+                val a = i * 60f + (bits and 7) * 7f
+                val dist = d.r * (0.3f + (bits and 3) * 0.25f)
+                s.rect(d.x + MathUtils.cosDeg(a) * dist - 0.04f, d.y + MathUtils.sinDeg(a) * dist - 0.025f, 0.08f, 0.05f)
+            }
+            return
+        }
         if (d.item == ItemType.WATER) {
             for (i in 0 until 3) {
                 val ox = ((d.seed shr (i * 3)) and 7) / 7f - 0.5f
@@ -809,6 +1027,13 @@ object Art {
             val a = bits * (360f / 32f)
             val dist = d.r * (0.9f + (bits and 3) * 0.2f)
             s.circle(d.x + MathUtils.cosDeg(a) * dist, d.y + MathUtils.sinDeg(a) * dist, d.r * (0.25f + (bits and 1) * 0.15f), 8)
+        }
+        if (d.item == ItemType.MELON) {
+            paint(s, Palette.MELON_SEED)
+            for (i in 0 until 3) {
+                val bits = (d.seed ushr (i * 6 + 2)) and 63
+                s.ellipse(d.x + ((bits and 7) / 7f - 0.5f) * d.r, d.y + ((bits ushr 3) / 7f - 0.5f) * d.r, 0.05f, 0.08f, 6)
+            }
         }
     }
 }

@@ -11,7 +11,10 @@ import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.utils.BufferUtils
 import com.badlogic.gdx.utils.ScreenUtils
 import com.pawtillery.game.BaseScreen
+import com.pawtillery.game.ComputerLevel
 import com.pawtillery.game.GameScreen
+import com.pawtillery.game.ItemType
+import com.pawtillery.game.MatchConfig
 import com.pawtillery.game.MatchSetup
 import com.pawtillery.game.MenuScreen
 import com.pawtillery.game.PetKind
@@ -29,6 +32,8 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
     private var time = 0f
     private var next = 0
     private val steps = ArrayList<Pair<Float, () -> Unit>>()
+    /** Actions that each wait for the person's next turn to aim. */
+    private val myTurns = ArrayDeque<() -> Unit>()
 
     private val screen: BaseScreen get() = game.screen as BaseScreen
 
@@ -140,8 +145,51 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         at(121.2f) { game.switchTo(MenuScreen(game)) }
         at(121.8f) { tap("trophies") }
         at(122.4f) { shot("30-trophies") }
-        at(122.6f) { Gdx.app.exit() }
+        // Destruction and power-ups: a Pro match against the Champion, one turn at a time.
+        at(122.6f) {
+            game.settings.easyMode = false
+            game.switchTo(GameScreen(game, MatchSetup(PetKind.DOG, PetKind.CAT, setOf(Side.RIGHT), MatchConfig.FULL_MATCH, ComputerLevel.CHAMPION)))
+        }
+        at(123.6f) { tap("auto") }
+        at(125.8f) { tap("ready") }
+        myTurns += {
+            shot("31-power-ups")
+            tap("power:MEGA")
+            tap("item:BOWLING")
+            at(time + 0.2f) { shot("32-mega-bowling") }
+            at(time + 0.3f) { autoThrow(ItemType.BOWLING) }
+            for (i in 0 until 10) at(time + 0.6f + i * 0.3f) { shot("33-smash-$i") }
+        }
+        myTurns += {
+            tap("item:PAINT_BOMB")
+            at(time + 0.2f) { autoThrow(ItemType.PAINT_BOMB) }
+            for (i in 0 until 14) at(time + 0.5f + i * 0.2f) { shot("34-bomb-$i") }
+        }
+        myTurns += {
+            tap("power:TRIPLE")
+            tap("item:FIREWORK")
+            at(time + 0.2f) { shot("35-triple-firework") }
+            at(time + 0.3f) { autoThrow(ItemType.FIREWORK) }
+            for (i in 0 until 10) at(time + 0.6f + i * 0.25f) { shot("36-fireworks-$i") }
+        }
+        myTurns += {
+            tap("power:UMBRELLA")
+            tap("item:MELON")
+            at(time + 0.3f) { shot("37-umbrella") }
+            at(time + 0.4f) { autoThrow(ItemType.MELON) }
+            for (i in 0 until 8) at(time + 0.7f + i * 0.25f) { shot("38-melon-$i") }
+        }
+        myTurns += {
+            shot("39-later")
+            at(time + 0.2f) { Gdx.app.exit() }
+        }
     }
+
+    private fun autoThrow(item: ItemType) {
+        (game.screen as? GameScreen)?.devAutoThrow(item)
+    }
+
+    private var lastTurnAction = 0f
 
     override fun render() {
         game.render()
@@ -149,6 +197,11 @@ class ScreenshotTour(private val outDir: File) : ApplicationAdapter() {
         while (next < steps.size && steps[next].first <= time) {
             steps[next].second()
             next++
+        }
+        val gs = game.screen as? GameScreen
+        if (time > 123f && gs != null && gs.isHumanAiming && myTurns.isNotEmpty() && time - lastTurnAction > 1.5f) {
+            lastTurnAction = time
+            myTurns.removeFirst()()
         }
     }
 

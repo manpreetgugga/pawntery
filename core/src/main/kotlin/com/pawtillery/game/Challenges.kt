@@ -119,6 +119,20 @@ object Challenges {
             fort = listOf(p(crate, 1.8f), p(crate, 1.8f), p(crate, -1.8f), p(crate, -1.8f), p(box, 3.0f)),
             wind = 1.5f, goal = 40f, maxThrows = 6, threeStars = 3, twoStars = 4,
         ),
+        Challenge(
+            11, "Demolition Day", "A huge bunker. One paint bomb, then clean up the rubble.",
+            PetKind.DOG, PetKind.CAT,
+            items = listOf(ItemType.PAINT_BOMB to 1, ItemType.BOWLING to 2, ItemType.MUD to -1),
+            fort = listOf(p(crate, 1.9f), p(crate, 1.9f), p(box, 1.9f), p(gnome, 1.1f), p(gnome, -1.4f), p(plank, -0.15f), p(crate, -2.5f), p(box, 3.2f)),
+            wind = 0f, goal = 45f, maxThrows = 6, threeStars = 3, twoStars = 4,
+        ),
+        Challenge(
+            12, "Fireworks Night", "A roof keeps mud out. Pop a firework right above it!",
+            PetKind.CAT, PetKind.DOG,
+            items = listOf(ItemType.FIREWORK to 3, ItemType.MELON to 1, ItemType.MUD to -1),
+            fort = listOf(p(gnome, 1.3f), p(gnome, -1.3f), p(plank, 0f), p(crate, 2.6f), p(crate, 2.6f), p(box, -2.6f)),
+            wind = 1f, goal = 40f, maxThrows = 6, threeStars = 3, twoStars = 4,
+        ),
     )
 
     fun byNumber(n: Int): Challenge? = all.firstOrNull { it.number == n }
@@ -142,7 +156,9 @@ object Challenges {
         val extras = listOf(pot, tire, box, gnome)
         repeat(rng.nextInt(3)) { fort += p(extras[rng.nextInt(extras.size)], if (rng.nextBoolean()) -2.6f else 3.9f) }
         val wind = (rng.nextInt(-6, 7) * 0.5f)
-        val items = listOf(player.signature to 3, ItemType.WATER to 1, ItemType.MUD to -1)
+        // One big throw to try each day.
+        val bonus = listOf(ItemType.MELON, ItemType.FIREWORK, ItemType.PAINT_BOMB)[rng.nextInt(3)]
+        val items = listOf(player.signature to 3, bonus to 1, ItemType.WATER to 1, ItemType.MUD to -1)
         val windText = when {
             wind == 0f -> "no wind"
             wind * Side.LEFT.dir > 0f -> "a tailwind"

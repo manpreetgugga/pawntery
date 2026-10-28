@@ -24,8 +24,8 @@ class ChallengeTest {
                 assertTrue("${challenge.title}: can throw ${plan.item}", m.throwItem(plan.item, plan.vx, plan.vy))
                 var t = 0
                 while (m.phase != Phase.AIM && m.phase != Phase.OVER && t < 2000) {
-                    val s = m.activeSplitter
-                    if (plan.splitAtApex && s != null && s.body.linearVelocity.y < 0f) m.splitActive()
+                    val s = m.tapTarget
+                    if (plan.splitAtApex && s != null && s.body.linearVelocity.y < 0f) m.tap()
                     m.step()
                     t++
                 }

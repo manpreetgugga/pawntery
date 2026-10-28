@@ -23,26 +23,28 @@ Or build it yourself in Android Studio (see [Build the Android app](#build-the-a
 |---|---|---|---|---|
 | You build your own defense | no | no (levels are fixed) | no | **yes: 6 pieces, real physics** |
 | Opponent | another tank | fixed pigs | another pet | **another pet who also builds** |
-| Damage | health/points | destruction | health | **mess meter, nothing violent** |
-| Special throws | weapon list | bird powers | power-ups | **per-pet signature throw** |
+| Damage | health/points | destruction | health | **mess meter, nothing violent, plus forts that crack and break** |
+| Special throws | weapon list | bird powers | power-ups | **per-pet signature throw, big throws and four power-ups** |
 
 ## How to play
 
 - **Build:** tap a piece (box, crate, plank, flower pot, gnome, tire), then touch your yard to drop it. Pieces stack and topple for real. "Turn" rotates, "Undo" takes the last one back, "Auto" builds a fort for you.
 - **Throw:** drag back anywhere and let go, like a slingshot. Further back throws harder. For precise, repeatable shots, use the **angle and power** steppers (one degree or one percent per tap, hold to repeat) and tap **Throw!**. Your aim is kept between turns, so you can adjust from your last throw.
-- **Trick shots:** a boomerang that hits on its way back, a bowling ball or shell that banks off something first, or two or more split pieces landing (Double!, Triple!) each earn a 5-treat bonus.
-- **Items:** Mud Ball (unlimited), Water Balloon (soaks everything nearby, even behind walls), Bowling Ball (smashes forts), plus each pet's signature throw.
+- **Trick shots:** a boomerang that hits on its way back, a bowling ball or shell that banks off something first, two or more split pieces or Triple throws landing (Double!, Triple!), or a firework popped right above the pet (Sky pop!) each earn a 5-treat bonus.
+- **Items:** Mud Ball (unlimited), Water Balloon (soaks everything nearby, even behind walls), Bowling Ball (smashes forts), Watermelon (crashes through, then bursts in a big splash), Firework (floats far; tap to pop it in the air), Paint Bomb (one per match: a huge paint blast that throws forts around), plus each pet's signature throw.
+- **Smash their fort:** hard hits, blasts and falls crack fort pieces, and cracks grow until the piece breaks: boxes crunch, crates crash, planks snap, pots and gnomes shatter. Tires are nearly unbreakable. Soft throws (mud, water, bones...) never break anything, and nothing breaks while building.
+- **Power-ups:** once per match each: *Mega* (the next throw is twice as big), *Triple* (three at once), *Calm* (no wind for this throw, in Pro mode) and *Umbrella* (blocks the next hit on your pet). The computer uses them too.
 - **Modes:** *Easy* shows the full aim guide and has no wind. *Pro* has wind that changes every turn and only a short aim guide.
 - **Play vs Computer** (Rookie, Normal or Champion; Champion wins pay 50% more treats) or **2 Players on one phone**, as a *Quick* (5 throws each) or *Full* (10 throws each) match.
 
 ### Trick Shots
 
-Ten single-player puzzle levels. Each gives you a pet and a set of throws against a ready-made fort; mess the target up to the goal within the throw limit. Fewer throws earn up to 3 stars, and every new star is worth 10 treats. Levels open one at a time and teach each item: lobbing over walls, water splash past a roof, smashing a bunker, boomerang from behind, hairball splits, headwinds, carrots in a gale, shells banked off the hedge, and a seed storm. Later levels let you try the pets you haven't unlocked yet. A unit test plays every level with a sharp computer player to prove each one can be beaten.
+Twelve single-player puzzle levels. Each gives you a pet and a set of throws against a ready-made fort; mess the target up to the goal within the throw limit. Fewer throws earn up to 3 stars, and every new star is worth 10 treats. Levels open one at a time and teach each item: lobbing over walls, water splash past a roof, smashing a bunker, boomerang from behind, hairball splits, headwinds, carrots in a gale, shells banked off the hedge, a seed storm, a paint-bomb demolition and fireworks over a roof. Later levels let you try the pets you haven't unlocked yet. A unit test plays every level with a sharp computer player to prove each one can be beaten.
 
 ### Daily challenge and trophies
 
-- **Daily**: a fresh Trick Shot every day, the same for everyone on the same date: a random pet pairing, fort and wind built from the same parts as the hand-made levels (a test plays 16 days of them to make sure they are fair). The first finish each day pays 30 treats.
-- **Trophies**: 14 one-time goals, from *First Splat* to *Champion Slayer*, *Bank Robber*, *Perfectionist* and *Family Night*. Each pays treats and pops up as a card when earned. The Trophies screen also shows lifetime stats: wins, best streak, hit rate, trick shots and more.
+- **Daily**: a fresh Trick Shot every day, the same for everyone on the same date: a random pet pairing, fort, wind and one big throw (watermelon, firework or paint bomb), built from the same parts as the hand-made levels (a test plays 16 days of them to make sure they are fair). The first finish each day pays 30 treats.
+- **Trophies**: 16 one-time goals, from *First Splat* to *Champion Slayer*, *Bank Robber*, *Demolition Crew*, *Perfectionist* and *Family Night*. Each pays treats and pops up as a card when earned. The Trophies screen also shows lifetime stats: wins, best streak, hit rate, trick shots and more.
 
 ### Pets
 
@@ -54,7 +56,7 @@ Ten single-player puzzle levels. Each gives you a pet and a set of throws agains
 | Turtle | **Shell Slide**: bounces and rolls through forts | 120 treats |
 | Parrot | **Seed Shower**: tap in flight to scatter five seeds | 180 treats |
 
-Every finished game earns **treats** (win 30, draw 18, loss 12 for a full match, plus 2 per direct hit). The computer can play any pet, so players see what they can unlock.
+Every finished game earns **treats** (win 30, draw 18, loss 12 for a full match, plus 2 per direct hit, 5 per trick shot and 1 per fort piece smashed). The computer can play any pet, so players see what they can unlock.
 
 ## Earning money
 
@@ -71,7 +73,7 @@ From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK 
 
 ## Publishing on Google Play
 
-Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 1024x500 feature graphic, seven 1920x1080 screenshots and **[store/listing.md](store/listing.md)** (name, short and full description, category, release notes). The launcher icon in the app matches the store icon. Follow docs/MONETIZATION.md for the content rating, target audience (Families) and Data safety answers.
+Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 1024x500 feature graphic, eight 1920x1080 screenshots and **[store/listing.md](store/listing.md)** (name, short and full description, category, release notes). The launcher icon in the app matches the store icon. Follow docs/MONETIZATION.md for the content rating, target audience (Families) and Data safety answers.
 
 ## Project layout
 
@@ -104,7 +106,7 @@ No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-b
 ## Honest notes
 
 - This project was built in a cloud environment that cannot download Google's Android build tools, so the Android app itself was never built there. The GitHub Actions workflow builds it on GitHub's machines; check that its *Android APK* job is green.
-- The game logic, physics, computer player, levels and money rules are covered by 28 unit tests, and every screen was checked with screenshots from the desktop test build.
+- The game logic, physics, computer player, levels and money rules are covered by 39 unit tests, and every screen was checked with screenshots from the desktop test build.
 - All art is drawn in code and all sound and music is synthesized. They are consistent and light (the whole game is under 1 MB of assets), but a professional artist and composer would lift it further.
 - The store and ad code for Android in `docs/MONETIZATION.md` is written but not yet compiled; Android Studio will point out anything that changed in Google's libraries.
 

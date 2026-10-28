@@ -179,6 +179,74 @@ def chirp():
     return squeak(1500) + [0.0] * n(0.04) + squeak(1800)
 
 
+def place_at(track, clip, seconds, g=1.0):
+    """Adds [clip] into [track] starting at [seconds], growing the track if needed."""
+    start = n(seconds)
+    if len(track) < start + len(clip):
+        track.extend([0.0] * (start + len(clip) - len(track)))
+    for i, s in enumerate(clip):
+        track[start + i] += s * g
+
+
+def crash():
+    """Cardboard and wood giving way: a thump, a woody knock and a run of cracks."""
+    out = apply_env(sweep(150, 55, 0.3), 0.005, 2.4)
+    place_at(out, apply_env(sweep(420, 300, 0.1, soft_square), 0.002, 2.5), 0.0, 0.5)
+    for k in range(7):
+        crack = apply_env(lowpass(noise(0.045), [2600 + rng.uniform(-900, 900)] * n(0.045)), 0.0, 3.0)
+        place_at(out, crack, rng.uniform(0.0, 0.22), 0.9 - k * 0.08)
+    return out
+
+
+def shatter():
+    """A flower pot or gnome breaking: a crack, then bits of clay tinkling down."""
+    total = n(0.65)
+    bright = noise(0.65)
+    dull = lowpass(bright, [1200] * total)
+    out = apply_env([b - d for b, d in zip(bright, dull)], 0.0, 4.0)
+    for k in range(9):
+        f = rng.uniform(2200, 4800)
+        ping = apply_env(sweep(f, f * 0.97, 0.09), 0.001, 3.0)
+        place_at(out, ping, 0.04 + k * 0.05 + rng.uniform(0, 0.03), 0.45 - k * 0.035)
+    return out
+
+
+def kaboom():
+    """The paint bomb: a deep cartoon boom with a whoosh of air."""
+    total = n(1.0)
+    boom = apply_env(sweep(95, 32, 1.0), 0.004, 2.2)
+    rush = apply_env(lowpass(noise(1.0), [max(160, 3200 * (1 - i / total) ** 2) for i in range(total)]), 0.0, 1.6)
+    return mix(boom, gain(rush, 0.9))
+
+
+def crackle():
+    """A firework: a quick whistle, then a shower of crackles."""
+    out = apply_env(sweep(2300, 1500, 0.12), 0.01, 1.0)
+    out = gain(out, 0.35)
+    for k in range(26):
+        click = apply_env(lowpass(noise(0.018), [6000] * n(0.018)), 0.0, 2.0)
+        t = 0.1 + (k / 26) ** 1.4 * 0.7 + rng.uniform(0, 0.02)
+        place_at(out, click, t, 1.0 - k * 0.03)
+    return out
+
+
+def powerup():
+    """A bright rising chime."""
+    out = []
+    for f in (660, 880, 1320):
+        out += apply_env(sweep(f, f * 1.02, 0.07, soft_square), 0.004, 1.2)
+    tail = apply_env(sweep(1760, 1800, 0.22), 0.01, 1.4)
+    return out + gain(tail, 0.6)
+
+
+def squish():
+    """A watermelon bursting: a wet, wobbly blorp."""
+    total = n(0.4)
+    wet = lowpass(noise(0.4), [700 + 600 * math.sin(2 * math.pi * 11 * i / RATE) for i in range(total)])
+    blorp = apply_env(sweep(230, 85, 0.3), 0.01, 2.0)
+    return mix(apply_env(wet, 0.02, 1.8), gain(blorp, 0.9))
+
+
 if __name__ == "__main__":
     write("throw.wav", throw(), 0.6)
     write("splat.wav", splat())
@@ -193,3 +261,9 @@ if __name__ == "__main__":
     write("meow.wav", meow(), 0.7)
     write("squeak.wav", squeak(950), 0.55)
     write("chirp.wav", chirp(), 0.55)
+    write("crash.wav", crash(), 0.75)
+    write("shatter.wav", shatter(), 0.6)
+    write("kaboom.wav", kaboom(), 0.9)
+    write("crackle.wav", crackle(), 0.6)
+    write("powerup.wav", powerup(), 0.5)
+    write("squish.wav", squish(), 0.75)

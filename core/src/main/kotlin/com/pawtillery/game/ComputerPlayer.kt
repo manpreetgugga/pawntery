@@ -3,6 +3,7 @@ package com.pawtillery.game
 import com.badlogic.gdx.math.MathUtils
 import com.badlogic.gdx.math.Rectangle
 import com.badlogic.gdx.math.Vector2
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.sqrt
@@ -17,7 +18,8 @@ enum class ComputerLevel(val displayName: String, val angleError: Float, val spe
     CHAMPION("Champion", 0.55f, 0.1f, false, 1.5f),
 }
 
-class ShotPlan(val item: ItemType, val vx: Float, val vy: Float, val splitAtApex: Boolean)
+/** A planned throw; [likelyHit] means the aim (before error) lands on the other pet. */
+class ShotPlan(val item: ItemType, val vx: Float, val vy: Float, val splitAtApex: Boolean, val likelyHit: Boolean = false)
 
 /**
  * The computer opponent. It searches throws with [Trajectory] (so it plays by the same physics as
@@ -68,6 +70,23 @@ class ComputerPlayer(
         }
     }
 
+    /** Plans this turn like [planShot], and uses power-ups along the way now and then. */
+    fun takeTurn(match: Match, side: Side): ShotPlan {
+        val left = match.throwsLeft(side)
+        // Calm first, so the throw is planned without wind.
+        if (match.canUsePower(PowerUp.CALM) && abs(match.wind) >= 2f && rng.nextFloat() < 0.6f) match.usePower(PowerUp.CALM)
+        if (match.canUsePower(PowerUp.UMBRELLA) && (match.pet(side).mess >= 30f || left <= 3) && rng.nextFloat() < 0.5f) match.usePower(PowerUp.UMBRELLA)
+        val plan = planShot(match, side)
+        // Mega and Triple are saved for good chances, and spent before the match runs out.
+        val now = left <= 1 || (plan.likelyHit && (left <= 3 || rng.nextFloat() < 0.25f))
+        if (now && match.canUsePower(PowerUp.MEGA)) {
+            match.usePower(PowerUp.MEGA)
+        } else if (now && match.canUsePower(PowerUp.TRIPLE)) {
+            match.usePower(PowerUp.TRIPLE)
+        }
+        return plan
+    }
+
     fun planShot(match: Match, side: Side): ShotPlan {
         val targetPos = match.pet(side.other).body.position
         val target = Vector2(targetPos.x, targetPos.y)
@@ -85,14 +104,21 @@ class ComputerPlayer(
         val mud = search(match, side, ItemType.MUD, target, blockers)
         var item = ItemType.MUD
         var best = mud
+        fun use(choice: ItemType) {
+            item = choice
+            best = search(match, side, choice, target, blockers)
+        }
         if (mud.stop == Stop.PET) {
             val roll = rng.nextFloat()
             if (signature in available && roll < 0.45f) {
                 val sig = search(match, side, signature, target, blockers)
                 if (sig.stop == Stop.PET) { item = signature; best = sig }
             } else if (ItemType.WATER in available && roll < 0.65f) {
-                item = ItemType.WATER
-                best = search(match, side, ItemType.WATER, target, blockers)
+                use(ItemType.WATER)
+            } else if (ItemType.MELON in available && roll < 0.75f) {
+                use(ItemType.MELON)
+            } else if (ItemType.FIREWORK in available && roll < 0.82f) {
+                use(ItemType.FIREWORK)
             }
         } else {
             val bowling = if (ItemType.BOWLING in available) search(match, side, ItemType.BOWLING, target, blockers) else null
@@ -100,9 +126,17 @@ class ComputerPlayer(
             val sig = if (signature in available) search(match, side, signature, target, blockers) else null
             when {
                 sig != null && sig.stop == Stop.PET -> { item = signature; best = sig }
+                ItemType.PAINT_BOMB in available && rng.nextFloat() < 0.5f -> use(ItemType.PAINT_BOMB)
+                ItemType.MELON in available && rng.nextFloat() < 0.45f -> use(ItemType.MELON)
+                ItemType.FIREWORK in available && rng.nextFloat() < 0.4f -> use(ItemType.FIREWORK)
                 bowling != null && rng.nextFloat() < 0.75f -> { item = ItemType.BOWLING; best = bowling }
-                ItemType.WATER in available -> { item = ItemType.WATER; best = search(match, side, ItemType.WATER, target, blockers) }
+                ItemType.WATER in available -> use(ItemType.WATER)
             }
+        }
+        // Big throws left near the end are used rather than wasted.
+        if (match.throwsLeft(side) <= 2 && item == ItemType.MUD) {
+            val spare = listOf(ItemType.PAINT_BOMB, ItemType.MELON, ItemType.FIREWORK).firstOrNull { it in available }
+            if (spare != null) use(spare)
         }
 
         val angle = (best.angle + gauss() * angleError).coerceIn(5f, 88f)
@@ -112,7 +146,18 @@ class ComputerPlayer(
             side.dir * MathUtils.cosDeg(angle) * speed,
             MathUtils.sinDeg(angle) * speed,
             splitAtApex = item.splitCount > 0 && rng.nextFloat() < 0.75f,
+            likelyHit = best.stop == Stop.PET,
         )
+    }
+
+    /** The best throw with [item], before aiming error: for demos and screenshots. */
+    fun aimWith(match: Match, side: Side, item: ItemType): ShotPlan {
+        angleError = baseAngleError
+        speedError = baseSpeedError
+        val targetPos = match.pet(side.other).body.position
+        val blockers = match.pieces.filter { it.side == side.other }.map { match.bodyBounds(it.body, Rectangle()) }
+        val best = search(match, side, item, Vector2(targetPos.x, targetPos.y), blockers)
+        return ShotPlan(item, side.dir * MathUtils.cosDeg(best.angle) * best.speed, MathUtils.sinDeg(best.angle) * best.speed, false, best.stop == Stop.PET)
     }
 
     /** Coarse grid over angle and speed, then a finer pass around the best throw. */
@@ -151,7 +196,9 @@ class ComputerPlayer(
             Stop.PIECE -> if (!item.splatsOnContact) 0.5f * dist else 3f + dist
             else -> 3f + dist
         }
-        if (item == ItemType.WATER && r.stop != Stop.PET) score = maxOf(0f, dist - 1.2f)
+        // Bursts don't need a direct hit: landing close is as good.
+        val burst = item.burst
+        if (burst != null && r.stop != Stop.PET) score = maxOf(0f, dist - if (item == ItemType.WATER) 1.2f else burst.radius * 0.4f)
         // Prefer flatter, gentler throws among equally good ones: they are less sensitive to error.
         score += speed * 0.002f
         if (score < best.score) {

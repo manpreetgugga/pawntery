@@ -20,6 +20,12 @@ enum class PetKind(val displayName: String, val signature: ItemType, val price: 
 }
 
 /**
+ * How an item bursts on its first touch: pets within [radius] get messy (the closer, the messier),
+ * and things nearby are pushed away and, with [damage], cracked.
+ */
+class Burst(val radius: Float, val push: Float, val damage: Float)
+
+/**
  * Things a pet can throw. [mess] is what a direct hit adds to the other pet's mess meter at a
  * normal throwing speed; [startCount] of -1 means unlimited.
  */
@@ -40,21 +46,45 @@ enum class ItemType(
     val splitSpread: Float = 0f,
     val fragmentRadius: Float = 0f,
     val fragmentMess: Float = 0f,
+    /** Bursts on its first touch instead of splatting. */
+    val burst: Burst? = null,
+    /** Hard enough to crack and break fort pieces it hits. */
+    val smashes: Boolean = false,
+    /** Tapping during flight sets it off early (fireworks). */
+    val popsOnTap: Boolean = false,
     val hint: String,
 ) {
     MUD("Mud Ball", 0.32f, 2f, 15f, -1, true, hint = "Always ready. Splats on contact."),
-    WATER("Water Balloon", 0.4f, 1f, 24f, 2, true, hint = "Bursts and soaks everything nearby, even behind walls."),
-    BOWLING("Bowling Ball", 0.42f, 8f, 8f, 2, false, restitution = 0.05f, hint = "Heavy. Smashes forts apart."),
+    WATER("Water Balloon", 0.4f, 1f, 24f, 2, true, burst = Burst(3.2f, 1.4f, 0f), hint = "Bursts and soaks everything nearby, even behind walls."),
+    BOWLING("Bowling Ball", 0.42f, 8f, 8f, 2, false, restitution = 0.05f, smashes = true, hint = "Heavy. Smashes forts apart."),
+    MELON("Watermelon", 0.46f, 3f, 22f, 2, true, burst = Burst(2.3f, 2.2f, 8f), smashes = true, hint = "Heavy. Crashes through and bursts in a big splash."),
+    FIREWORK("Firework", 0.24f, 1.2f, 16f, 2, true, gravityScale = 0.5f, burst = Burst(3f, 4.5f, 26f), popsOnTap = true, hint = "Floats far and fast. Tap to pop it in the air!"),
+    PAINT_BOMB("Paint Bomb", 0.38f, 2.5f, 24f, 1, true, burst = Burst(3.4f, 7f, 50f), hint = "Kaboom! A huge paint blast that throws forts around."),
     BONE("Boomerang Bone", 0.3f, 1.5f, 18f, 2, true, gravityScale = 0.45f, returnAccel = 3.5f, hint = "Glides out and curves back. Hit them from behind!"),
     HAIRBALL("Hairball", 0.35f, 1.5f, 14f, 2, true, splitCount = 3, splitSpread = 11f, fragmentRadius = 0.25f, fragmentMess = 10f, hint = "Tap while it flies to split it into three."),
     CARROT("Carrot Rocket", 0.28f, 1.6f, 17f, 2, true, gravityScale = 0.3f, hint = "Flies fast and almost straight. Great for sneaky gaps."),
     SHELL("Shell Slide", 0.45f, 5f, 12f, 2, false, restitution = 0.45f, hint = "Bounces and rolls right through forts."),
     SEEDS("Seed Shower", 0.34f, 1.5f, 12f, 2, true, splitCount = 5, splitSpread = 13f, fragmentRadius = 0.19f, fragmentMess = 7f, hint = "Tap while it flies to scatter five seeds."),
+    ;
+
+    /** Reacts to a tap in flight: splits or pops. */
+    val tappable: Boolean get() = splitCount > 0 || popsOnTap
+}
+
+/** One-use boosts: each player gets one of each per match (none in Trick Shots). */
+enum class PowerUp(val displayName: String, val hint: String) {
+    MEGA("Mega", "Mega: your next throw is twice as big"),
+    TRIPLE("Triple", "Triple: throw three at once"),
+    CALM("Calm", "Calm: no wind for this throw"),
+    UMBRELLA("Umbrella", "Umbrella: blocks the next hit on your pet"),
 }
 
 enum class PieceShape { BOX, TRAPEZOID, CIRCLE }
 
-/** Fort pieces: [w] and [h] are the unrotated size in meters. */
+/**
+ * Fort pieces: [w] and [h] are the unrotated size in meters. A piece breaks once its damage from
+ * hard knocks reaches [toughness].
+ */
 enum class PieceType(
     val displayName: String,
     val shape: PieceShape,
@@ -63,13 +93,14 @@ enum class PieceType(
     val density: Float,
     val friction: Float,
     val restitution: Float,
+    val toughness: Float,
 ) {
-    BOX("Box", PieceShape.BOX, 1.0f, 1.0f, 0.5f, 0.6f, 0.05f),
-    CRATE("Crate", PieceShape.BOX, 1.2f, 1.2f, 1.2f, 0.7f, 0.05f),
-    PLANK("Plank", PieceShape.BOX, 3.0f, 0.3f, 1.0f, 0.7f, 0.05f),
-    POT("Flower Pot", PieceShape.TRAPEZOID, 0.9f, 0.9f, 2.0f, 0.6f, 0.05f),
-    GNOME("Gnome", PieceShape.BOX, 0.7f, 1.3f, 2.5f, 0.6f, 0.05f),
-    TIRE("Tire", PieceShape.CIRCLE, 1.2f, 1.2f, 0.9f, 0.9f, 0.45f),
+    BOX("Box", PieceShape.BOX, 1.0f, 1.0f, 0.5f, 0.6f, 0.05f, 32f),
+    CRATE("Crate", PieceShape.BOX, 1.2f, 1.2f, 1.2f, 0.7f, 0.05f, 62f),
+    PLANK("Plank", PieceShape.BOX, 3.0f, 0.3f, 1.0f, 0.7f, 0.05f, 42f),
+    POT("Flower Pot", PieceShape.TRAPEZOID, 0.9f, 0.9f, 2.0f, 0.6f, 0.05f, 28f),
+    GNOME("Gnome", PieceShape.BOX, 0.7f, 1.3f, 2.5f, 0.6f, 0.05f, 50f),
+    TIRE("Tire", PieceShape.CIRCLE, 1.2f, 1.2f, 0.9f, 0.9f, 0.45f, 150f),
 }
 
 /** Field layout in meters. The camera always shows at least WIDTH x HEIGHT. */
@@ -137,20 +168,42 @@ class Pet(val side: Side, val kind: PetKind, val body: Body) {
     val decals = ArrayList<Decal>()
 }
 
-class Piece(val type: PieceType, val side: Side, val rotated: Boolean, val body: Body) {
+class Piece(val type: PieceType, val side: Side, val rotated: Boolean, val body: Body, val seed: Int) {
     val decals = ArrayList<Decal>()
+    /** Knocks taken so far; the piece breaks at its type's toughness. */
+    var damage = 0f
+    /** Knocks felt during the current physics step, added to [damage] once the step is over. */
+    var pendingKnock = 0f
+    /**
+     * Steps left during which knocks don't count, because something soft (a mud ball, a balloon)
+     * just pressed the piece into whatever it stands on.
+     */
+    var softTimer = 0
+
+    /** How close to breaking, from 0 (new) to 1. */
+    val wear: Float get() = (damage / type.toughness).coerceIn(0f, 1f)
 
     val halfW: Float get() = (if (rotated) type.h else type.w) / 2f
     val halfH: Float get() = (if (rotated) type.w else type.h) / 2f
 }
 
-class Projectile(val item: ItemType, val side: Side, val body: Body, val fragment: Boolean) {
+/**
+ * Something in flight. [scale] is its size (bigger with Mega); [multi] marks one of a Triple throw.
+ */
+class Projectile(val item: ItemType, val side: Side, val body: Body, val fragment: Boolean, val scale: Float = 1f, val multi: Boolean = false) {
     var age = 0f
     var dead = false
     var scoredPet = false
     /** Times it hit something other than a pet; a heavy roller that bounces before hitting is a bank shot. */
     var bounces = 0
 
-    val radius: Float get() = if (fragment) item.fragmentRadius else item.radius
-    val mess: Float get() = if (fragment) item.fragmentMess else item.mess
+    val radius: Float get() = (if (fragment) item.fragmentRadius else item.radius) * scale
+    val mess: Float get() = (if (fragment) item.fragmentMess else item.mess) * (if (scale > 1f) MEGA_MESS else 1f) * (if (multi) TRIPLE_MESS else 1f)
+
+    companion object {
+        const val MEGA_SCALE = 1.6f
+        const val MEGA_MESS = 1.5f
+        /** Each of a Triple throw's three items carries a bit less, so the three together aren't overwhelming. */
+        const val TRIPLE_MESS = 0.75f
+    }
 }

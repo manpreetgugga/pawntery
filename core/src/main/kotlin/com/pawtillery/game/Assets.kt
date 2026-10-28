@@ -86,6 +86,7 @@ class Assets : Disposable {
         const val MUSIC_VOLUME = 0.45f
         private val SOUND_NAMES = listOf(
             "throw", "splat", "thud", "bonk", "pop", "place", "click", "win", "boing", "woof", "meow", "squeak", "chirp",
+            "crash", "shatter", "kaboom", "crackle", "powerup", "squish",
         )
     }
 }

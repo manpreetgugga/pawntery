@@ -2,13 +2,13 @@ package com.pawtillery.game
 
 import com.badlogic.gdx.Input
 
-/** Trick Shot level picker: ten levels in two rows, each showing its best stars. */
+/** Trick Shot level picker: the levels in two rows, each showing its best stars. */
 class ChallengeListScreen(game: Pawtillery) : BaseScreen(game) {
     private var time = 0f
 
-    private val cardW = 250f
+    private val cardW = 228f
     private val cardH = 230f
-    private val gap = 22f
+    private val gap = 18f
 
     override fun render(delta: Float) {
         time += delta
@@ -69,7 +69,7 @@ class ChallengeListScreen(game: Pawtillery) : BaseScreen(game) {
 
     private fun layoutButtons(): List<Button> {
         val list = ArrayList<Button>()
-        val perRow = 5
+        val perRow = (Challenges.all.size + 1) / 2
         val rowW = perRow * cardW + (perRow - 1) * gap
         val x0 = (uiW - rowW) / 2f
         val top = uiH - 130f
