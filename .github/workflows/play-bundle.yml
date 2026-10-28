@@ -1,0 +1,59 @@
+# Builds the signed bundle (.aab) to upload in Google Play Console. Run it by hand: Actions >
+# "Play Store bundle" > Run workflow. It needs the four UPLOAD_* secrets (see docs/PLAY_CONSOLE.md)
+# and publishes the bundle as the "Google Play bundle" release.
+name: Play Store bundle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    name: Signed bundle for Google Play
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to publish the "Google Play bundle" release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unpack the upload key
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$UPLOAD_KEYSTORE_BASE64" ]; then
+            echo "::error::The upload key isn't set up yet. Add the four UPLOAD_* secrets first (docs/PLAY_CONSOLE.md, part 2)."
+            exit 1
+          fi
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+      - name: Build the signed bundle
+        env:
+          PAWTILLERY_STORE_BUILD: "true"
+          UPLOAD_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :android:bundleRelease --console=plain
+      # Google Play doesn't allow apps that update themselves: the store bundle must have neither
+      # internet access nor permission to install apps (until ads or billing need internet).
+      - name: Check the bundle is signed and store-safe
+        run: |
+          aab=$(ls android/build/outputs/bundle/release/*.aab)
+          jarsigner -verify "$aab" | tee verify.txt
+          grep -q "jar verified" verify.txt
+          unzip -p "$aab" base/manifest/AndroidManifest.xml | strings > manifest.txt
+          if grep -E "REQUEST_INSTALL_PACKAGES|permission.INTERNET" manifest.txt; then
+            echo "The store bundle must not be able to install updates or go online"; exit 1
+          fi
+          cp "$aab" pawtillery-play.aab
+          ls -l pawtillery-play.aab
+      - name: Publish the bundle as the "Google Play bundle" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete play-bundle --cleanup-tag --yes || true
+          gh release create play-bundle pawtillery-play.aab --prerelease --target "$GITHUB_SHA" \
+            --title "Google Play bundle" \
+            --notes "Version code $((GITHUB_RUN_NUMBER + 1)) from commit $GITHUB_SHA. Upload pawtillery-play.aab in Play Console (docs/PLAY_CONSOLE.md, part 6). This file is for Play Console, not for installing on a phone."

@@ -10,8 +10,15 @@ val natives: Configuration by configurations.creating
 val abis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 
 // GitHub numbers its builds. Test builds take that number, so each one is newer than the last and
-// installed copies know when to update. Builds made on your own computer are build 0.
+// installed copies know when to update. Google Play bundles (the "Play Store bundle" workflow) are
+// numbered by that workflow's own runs, so each upload is higher too. Builds made on your own
+// computer are build 0.
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+val storeBuild = System.getenv("PAWTILLERY_STORE_BUILD") == "true"
+
+// The Google Play upload key, handed to the "Play Store bundle" workflow as GitHub secrets. It is
+// never stored in git. Without it, release builds come out unsigned.
+val uploadKeystore: String? = System.getenv("UPLOAD_KEYSTORE_FILE")
 
 android {
     namespace = "com.pawtillery.game"
@@ -22,7 +29,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1 + buildNumber
-        versionName = if (buildNumber > 0) "1.0.0 (test build $buildNumber)" else "1.0.0"
+        versionName = if (buildNumber > 0 && !storeBuild) "1.0.0 (test build $buildNumber)" else "1.0.0"
     }
 
     signingConfigs {
@@ -33,6 +40,14 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        uploadKeystore?.let { path ->
+            create("upload") {
+                storeFile = file(path)
+                storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+            }
         }
     }
 
@@ -47,6 +62,7 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             // Shrinking stays off until the libGDX/Box2D keep rules are tested on a device.
             isMinifyEnabled = false
         }

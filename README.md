@@ -81,7 +81,7 @@ From a terminal with the SDK installed: `./gradlew :android:assembleDebug` (APK 
 
 ## Publishing on Google Play
 
-Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 1024x500 feature graphic, eight 1920x1080 screenshots and **[store/listing.md](store/listing.md)** (name, short and full description, category, release notes). The launcher icon in the app matches the store icon. Follow docs/MONETIZATION.md for the content rating, target audience (Families) and Data safety answers.
+Everything for the store page is in **[store/](store/)**: the 512x512 icon, the 1024x500 feature graphic, eight 1920x1080 screenshots and **[store/listing.md](store/listing.md)** (name, short and full description, category, release notes). The launcher icon in the app matches the store icon. [docs/PLAY_CONSOLE.md](docs/PLAY_CONSOLE.md) has every Play Console step and form answer for the first release; docs/MONETIZATION.md has what changes once ads and Plus are switched on.
 
 ## Project layout
 
@@ -104,12 +104,11 @@ No Android SDK on the machine (for example on CI)? `./gradlew -p tools/desktop-b
 ## Next steps to earn money
 
 1. **Play it on real phones** (yours, your family's): the APK above. Note what's confusing or too hard, especially for kids.
-2. **Google Play developer account** ($25 one-time) at <https://play.google.com/console>.
-3. **Publish the privacy policy** somewhere public, fill in your support email in `docs/privacy-policy.md` and `store/listing.md`, and put its address in `ParentGate.PRIVACY_URL`.
-4. **Create the app** in Play Console, fill in the store listing from `store/`, answer content rating / target audience (Families) / Data safety as described in `docs/MONETIZATION.md`.
-5. **Release free first** (internal testing, then a closed test with friends and family; Google requires a closed test with testers for new personal accounts before production).
-6. **Switch on Plus and the rewarded ad** with `docs/MONETIZATION.md` once you have players: the game is built for it, and the Shop and ad button appear automatically.
-7. **Keep players coming back**: new Trick Shot packs, seasonal cosmetics, events. The Daily already gives a reason to open the game every day.
+2. **Put it on Google Play** with **[docs/PLAY_CONSOLE.md](docs/PLAY_CONSOLE.md)**: the developer account ($25 one-time), the upload key, every form answer, the store listing from `store/`, and the closed test with 12 testers for 14 days that Google requires of new personal accounts. The *Play Store bundle* workflow builds the signed `.aab` to upload.
+3. **Fill in your support email** in `docs/privacy-policy.md` and `store/listing.md` (the privacy policy is already public on GitHub, and `ParentGate.PRIVACY_URL` points to it).
+4. **Release free first**: the closed test, then production.
+5. **Switch on Plus and the rewarded ad** with `docs/MONETIZATION.md` once you have players: the game is built for it, and the Shop and ad button appear automatically.
+6. **Keep players coming back**: new Trick Shot packs, seasonal cosmetics, events. The Daily already gives a reason to open the game every day.
 
 ## Honest notes
 

@@ -160,6 +160,8 @@ class AndroidPlatform(private val activity: AndroidApplication) : Platform, Purc
 
 ## Google Play: forms to fill in correctly
 
+For the first release (no ads or purchases switched on yet), follow [PLAY_CONSOLE.md](PLAY_CONSOLE.md). Once Plus and the rewarded ad are on, update the forms like this:
+
 - **Target audience and content**: choose the age groups including **under 13**. The app then follows the **Families policy**. That is fine: AdMob is a Families self-certified ad SDK, ads are child-directed, and there are no external links without a grown-up check.
 - **Ads**: declare "Contains ads" once rewarded ads are on.
 - **Data safety**: the game itself collects nothing. Declare what the Google Play Billing and AdMob SDKs collect, following Google's own guidance for those SDKs (AdMob in child-directed mode still processes things like IP address for delivery and fraud prevention).
